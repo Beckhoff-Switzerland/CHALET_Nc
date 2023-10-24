@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_Adapter_AXIS_REF" Id="{9e5428c9-8e5a-46b5-8801-512d74b70fe2}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Adapter_AXIS_REF EXTENDS FB_CH_Object IMPLEMENTS I_Adapter_AXIS_REF
+VAR
+	Axis : Tc2_Mc2.AXIS_REF;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="getAxisRef" Id="{62e87008-7506-416f-86c5-88ac75791aca}">
+      <Declaration><![CDATA[PROPERTY getAxisRef : REFERENCE TO Tc2_MC2.AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{011826e2-1037-4c5e-ba24-ed312f73e7a1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[getAxisRef REF= THIS^.Axis;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

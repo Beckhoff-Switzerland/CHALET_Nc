@@ -1,0 +1,370 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <Itf Name="I_NcAxis_PLC" Id="{98eaa978-5fd0-01b2-16cd-d331b5e66798}">
+    <Declaration><![CDATA[INTERFACE I_NcAxis_PLC EXTENDS I_AxisStatus]]></Declaration>
+    <Folder Name="Command" Id="{3e4d059e-0469-09be-07b7-f53ea077ca5e}" />
+    <Folder Name="Status" Id="{5d709198-2bfd-02c6-017b-86d9c50b4f5c}">
+      <Folder Name="Dynamics" Id="{8da71876-a8ab-4652-98b4-fcb83df196f7}" />
+    </Folder>
+    <Property Name="ActAcceleration" Id="{8865ae95-3618-42bd-b7c4-24bfbc09e45a}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{e5daa4c3-9901-4f1a-9b90-b7f0503121a8}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="ActPosition" Id="{5610feea-70b0-493e-8419-282732faf2aa}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActPosition : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{1b8ad6c3-83f5-4401-9bc4-e05c75f38b3b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="ActPosModulo" Id="{ecf88633-1a02-49cd-8d72-cf644ad1669f}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActPosModulo : LREAL]]></Declaration>
+      <Get Name="Get" Id="{7b979351-13db-4c18-918e-13cb0d075305}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="ActVelocity" Id="{f0b72600-bc23-444c-9e57-84491e32c111}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{95b2b81e-9f4a-4c62-a7f1-ba2f701ab08b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="BufferEmpty" Id="{fafd276b-dc6d-4ab0-b4be-2eb424dacf55}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY BufferEmpty : BOOL;]]></Declaration>
+      <Get Name="Get" Id="{2090538b-9051-4084-be07-10913c7c2b6b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="DefaultAcceleration" Id="{8703f970-6bf7-4adc-b517-b8e72d708a67}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{368bd23d-0913-41d8-8309-8fbf48ec362e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{344dc724-8e46-4d9a-b568-d528d56f3a91}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="DefaultDeceleration" Id="{610f9020-8992-4b53-8764-0aef8cafece8}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultDeceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{c98052a8-2d31-447c-9af7-cd86a5968999}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{ca10c260-e6f3-43e2-a8b9-da0a1b8c1757}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="DefaultJerk" Id="{c96ceb5c-d500-4d06-8519-e5c4add004a5}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultJerk : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{2d180b56-78a1-456b-9b1e-e010db5a94a6}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{41b314d0-7796-4b95-b6b2-fef826fa2dc0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="DefaultVelocity" Id="{8d9e6149-e7ae-4bb1-bd1d-9b7b15ed4be5}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+//This value is used if commanded velocity is 0. Initvalue: Nc parameter manual velocity maximum
+PROPERTY DefaultVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{b78ca3f1-5721-4713-96b3-ce96d9cfc96a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{ea143b6c-d7cd-428d-82ad-08f29c559605}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="Feedback" Id="{7a89218f-24b9-4a7c-a1f6-ee9a7d16c8ee}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Feedback : I_CH_Feedback]]></Declaration>
+      <Get Name="Get" Id="{a05df69b-72a0-4f2c-a42f-c3610fd710a3}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="GearIn" Id="{5b001519-d7ba-4197-8838-e48ddba80722}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA connection
+(*! 
+<summary>
+	Establish an axis coupling to a single master axis.
+	<preliminary>
+		Both axis must be in standstill to apply the coupling.
+		In-motion coupling of the FB is not supported by this method.
+	</preliminary>
+</summary>
+<description>
+	The coupling is performed based on a <b>velocity</b> ratio.
+	As reference the master axis <b>command</b> value is used.
+	There is <b>no automatic phase compensation</b> applied.
+	
+	<h3> Missing features </h3>
+	<ul> 
+		<li> - </li>
+		<li> - </li>
+	</ul>
+</description> 
+*)
+
+METHOD PUBLIC GearIn  : I_CH_Feedback (*! Interface to the execution feedback *)
+VAR_INPUT
+	(*! Interface to a master axis *)
+	ipMasterAxisAdapter : I_Adapter_AXIS_REF;
+
+	(*! Gear ratio Numerator*)
+	fRatioNumerator: LREAL;
+	
+	(*! Gear ratio Denominator*)
+	nRatioDenominator: UINT;
+	
+	(*! Use the default dynamics if input=0.
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(*! Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(*! Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+END_VAR]]></Declaration>
+    </Method>
+    <Method Name="GearOut" Id="{f0242e6a-c4d1-4406-8dc2-be954291235b}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD GearOut  : I_CH_Feedback
+]]></Declaration>
+    </Method>
+    <Method Name="Initialize" Id="{8a2b25f3-bade-4019-b747-96e6c7e610b0}">
+      <Declaration><![CDATA[METHOD Initialize : HRESULT
+]]></Declaration>
+    </Method>
+    <Method Name="MoveAbsolute" Id="{2bac8adf-a73a-46fa-b737-8c5e2f63ea19}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveAbsolute  : I_CH_Feedback
+VAR_INPUT
+	fPosition		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="MoveRelative" Id="{181ae4c3-3bd4-4ec4-bbc2-91200c1e7b78}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveRelative  : I_CH_Feedback
+VAR_INPUT
+	fDistance		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="MoveVelocity" Id="{9e20822c-c9dc-4167-8fe2-a7d4a86e4f7c}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveVelocity  : I_CH_Feedback
+VAR_INPUT
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* If input=1, then direction is positive. 
+	Positive OR negative direction of travel (TYPE: Tc2_MC2.MC_Direction) *)
+	eDirection: Tc2_MC2.MC_Direction;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="MultiGearIn" Id="{7a1d6cf9-aca0-4d2a-8387-f4a3aced98a9}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MultiGearIn : I_CH_Feedback
+VAR_INPUT
+	(* Interface to an master axis *)
+	ipMasterAxisAdapter : I_Adapter_AXIS_REF;
+	
+	(* Gear ratio Numerator*)
+	fRatioNumerator: LREAL;
+	(* Gear ratio Denominator*)
+	nRatioDenominator: UINT;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="NcAxisType" Id="{a061fcdc-b430-44c6-81d1-11099ade50d3}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcAxisType : Tc2_MC2.E_NcAxisType]]></Declaration>
+      <Get Name="Get" Id="{2f7b26a2-b320-4fa6-a50c-e84aebd7fdf7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="NcDriveType" Id="{b56b1513-9919-4cd7-ac58-8664f148e8c1}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcDriveType : Tc2_MC2.E_NcDriveType]]></Declaration>
+      <Get Name="Get" Id="{9c73d535-a038-4ade-b0b3-6dc900097296}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="PowerOff" Id="{e023f10d-719f-4ab0-9e9b-aa3c8fc23964}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD PowerOff  : I_CH_Feedback
+]]></Declaration>
+    </Method>
+    <Method Name="PowerOn" Id="{a2ffe8a0-24de-4095-b051-ae71b3f7a45e}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD PowerOn : I_CH_Feedback
+]]></Declaration>
+    </Method>
+    <Method Name="Reset" Id="{a6362606-0b7c-0186-27ac-35f0b96fb53d}" FolderPath="Command\">
+      <Declaration><![CDATA[METHOD Reset : I_CH_Feedback
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="SetActPosition" Id="{c3ea8484-e523-42c0-984b-76ee23e023a1}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD SetActPosition : I_CH_Feedback
+VAR_INPUT
+	fPosition: LREAL;
+END_VAR]]></Declaration>
+    </Method>
+    <Method Name="Stop" Id="{42aacf8f-5e8b-4611-ba68-0ef3ec9f5fd7}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD Stop : I_CH_Feedback
+VAR_INPUT
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk: LREAL;
+END_VAR]]></Declaration>
+    </Method>
+    <Method Name="Update" Id="{cb1003cc-d4f8-0cf6-1a4d-64cc73520dfa}">
+      <Declaration><![CDATA[METHOD Update   : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+  </Itf>
+</TcPlcObject>

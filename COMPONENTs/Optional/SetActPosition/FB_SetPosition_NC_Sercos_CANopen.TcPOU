@@ -1,0 +1,503 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_SetPosition_NC_Sercos_CANopen" Id="{33ef65e9-9f88-49fe-bc08-db7c581b356d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide_all_locals'}
+FUNCTION_BLOCK FB_SetPosition_NC_Sercos_CANopen
+VAR_INPUT
+    Execute  : BOOL;
+    Position : LREAL; 
+    Mode     : BOOL; // RELATIVE=True, ABSOLUTE=False (Default)
+    //Options  : ST_SetPositionOptions; // only Feedback1 is supportet
+END_VAR
+
+VAR_OUTPUT
+    Done    : BOOL;
+    Busy    : BOOL;
+    Error   : BOOL;
+    ErrorID : UDINT;
+END_VAR
+
+VAR_IN_OUT
+    Axis 	: AXIS_REF;
+END_VAR
+
+VAR 
+	fPosition 			: LREAL;
+	bMode     			: BOOL; // RELATIVE=True, ABSOLUTE=False (Default)
+	nSeq 				: UDINT :=0;
+	nSeqCoE 			: UDINT :=0;
+	nSeqSoE				: UDINT :=0;
+	nSeqNC 				: UDINT :=0;
+	
+	fbTriggerExecute	: R_TRIG;
+	
+	fbReadDriveAddress 	: MC_ReadDriveAddress;
+	fbSetPosNC 			: MC_SetPosition;
+	fbSetPosAX5xxx		: FB_SoEAX5000SetPositionOffset;
+	fbSetPosAX8xxx		: FB_CoEAX8000SetPositionOffset;
+	fbSetPosEL72xxx		: FB_CoEEL72xxSetPositionOffset;
+	fbCoERead 			: FB_CoERead;
+	fbSoERead 			: FB_SoERead;
+	fbAdsWrite			: ADSWRITE;
+	strDeviceName		: STRING;
+	
+	
+	eReadPositionOffsetMemory    : E_PositionOffsetMemory;
+	eReadFromCoe :UINT := 99;
+	eReadFromSoe :UINT := 99;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbTriggerExecute(CLK:= THIS^.Execute);
+//Reset on positive execution edge
+IF fbTriggerExecute.Q THEN
+	THIS^.Done	:= FALSE;
+	THIS^.Busy	:= TRUE;
+	THIS^.Error	:= FALSE;
+	nSeqCoE		:= 0;
+	nSeqSoE		:= 0;
+	nSeqNC		:= 0;
+	bMode 		:= Mode;
+	fPosition 	:= Position;
+END_IF
+
+IF NOT (THIS^.Busy OR THIS^.Execute) THEN
+	THIS^.Done			:=FALSE;
+	THIS^.Busy			:=FALSE;
+	THIS^.Error			:=FALSE;
+	THIS^.ErrorID 		:= 0;
+	nSeqCoE				:= 0;
+	nSeqSoE				:= 0;
+	nSeqNC				:= 0;
+	fbReadDriveAddress.Execute := FALSE;
+END_IF
+
+	
+//call update methode during execution
+IF THIS^.Busy THEN
+	CASE THIS^.Axis.DriveAddress.NcDriveType OF 
+		//Sercos
+		Tc2_MC2.E_NcDriveType.NcDriveType_Sercos:
+			SetPosSoE();
+			
+		//MDP742 (Ax8000, EL72xx,...)
+		Tc2_MC2.E_NcDriveType.NcDriveType_CANopen_DS402_MDP742:
+			SetPosCoE();	
+		
+		//Undefined. Do an MC_ReadDriveAddress first.
+		Tc2_MC2.E_NcDriveType.NcDriveType_undefined:	
+			fbReadDriveAddress.Execute := TRUE;
+			IF fbReadDriveAddress.Done THEN
+				Axis.DriveAddress := fbReadDriveAddress.DriveAddress;
+			END_IF
+
+		//Simulation or not supported axis	
+		ELSE
+			SetPosNC();				
+	END_CASE
+END_IF
+
+		
+
+fbReadDriveAddress(Axis := Axis);
+
+]]></ST>
+    </Implementation>
+    <Method Name="SetPosCoE" Id="{2239c086-7fde-4eb9-8ddd-1cb4feb5df85}">
+      <Declaration><![CDATA[METHOD PRIVATE SetPosCoE : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// The warning " Access to VAR_IN_OUT..." can be disabled here. This Methode is private and so only called if the FB IN_OUT_VAR is valid
+{warning disable C0371}
+
+CASE nSeqCoE OF
+	0:	// **********************  Init *****************************************
+		fbSetPosAX8xxx.Execute		:= FALSE;
+		fbSetPosEL72xxx.Execute		:= FALSE;
+		fbCoERead.Execute			:= FALSE; 
+		fbAdsWrite.WRITE			:= FALSE;
+		nSeqCoE := 10;
+	
+	10: // ********************** SetPosition is only posible if axis is disabled **********************
+		IF NOT THIS^.Axis.Status.Disabled THEN
+			nSeqCoE := nSeqCoE + 1000;
+		ELSE
+			nSeqCoE := 50;	
+		END_IF
+		
+	50: // ********************** Re-initialization of the actual NC-encoder position **********************
+		// IF in the Nc is an Offset active (SetPos or MC_Home) then the calculated offset for the Encoder oder Drive is wrong.
+		fbAdsWrite.WRITE			:= TRUE;
+		fbAdsWrite.PORT				:= 501; //NC-Port
+		fbAdsWrite.IDXGRP			:= (16#5200 + THIS^.Axis.NcToPlc.AxisId);//"Index offset" specification for encoder functions (Index group 0x5200 + ID)
+		fbAdsWrite.IDXOFFS			:= 16#1B; //https://infosys.beckhoff.com/content/1033/tc3_ads_intro/713106315.html 
+		fbAdsWrite.LEN				:= 0; //VOID
+		fbAdsWrite.SRCADDR			:= 0; //VOID
+		nSeqCoE := 60;
+
+	60: // ********************** wait for Re-initialization of the actual NC-encoder position **********************
+		IF fbAdsWrite.ERR THEN
+			nSeqCoE := nSeqCoE + 1000;
+		ELSIF NOT fbAdsWrite.Busy THEN
+			fbAdsWrite.WRITE := FALSE;
+			nSeqCoE := 110;				
+		END_IF
+	
+
+			
+	110:// **********************  Coe Read Device Name to decide *****************************************	
+		fbCoERead.Execute			:= TRUE; 
+		fbCoERead.Index				:= 16#1008;
+		fbCoERead.SubIndex			:= 0; 
+		fbCoERead.pDstBuf			:= ADR(strDeviceName);
+		fbCoERead.BufLen			:= SIZEOF(strDeviceName);
+		nSeqCoE := 120;
+ 		
+	120:// **********************  wait for Coe Read Device Name to decide *****************************************	
+		IF fbCoERead.Error THEN
+			nSeqCoE := nSeqCoE + 1000;
+		ELSIF NOT fbCoERead.Busy THEN
+			fbCoERead.Execute := FALSE; 
+			IF FIND(STR1:= strDeviceName, STR2:= 'EL72') <> 0 THEN
+				nSeqCoE := 210;
+			ELSIF FIND(STR1:= strDeviceName, STR2:= 'ELM72') <> 0 THEN
+				nSeqCoE := 310;
+			ELSIF FIND(STR1:= strDeviceName, STR2:= 'AX8') <> 0 THEN
+				nSeqCoE := 410;
+			ELSE 
+				nSeqCoE := 800;				
+			END_IF
+		END_IF
+			
+
+		
+		
+//==================================== EL72xx ==================================================================					
+	210:// **********************  Execute EL72xx SetPosition *****************************************		
+		fbSetPosEL72xxx.Execute		:= TRUE; 
+		fbSetPosEL72xxx.Position	:= THIS^.fPosition; 
+		fbSetPosEL72xxx.Relative	:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		fbSetPosEL72xxx.Feedback	:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbSetPosEL72xxx.Memory		:= E_PositionOffsetMemory.ePositionOffsetMemory_Drive; //EL72xx does not support save in encoder memory
+		nSeqCoE := 211;
+
+	211:// **********************  Execute EL72xx SetPosition - done  *****************************************
+		THIS^.Done					:= NOT fbSetPosEL72xxx.Busy AND NOT fbSetPosEL72xxx.Error;
+		THIS^.Busy					:= fbSetPosEL72xxx.Busy;
+		THIS^.Error					:= fbSetPosEL72xxx.Error;
+		THIS^.ErrorID				:= fbSetPosEL72xxx.ErrorID;					
+		
+		
+		
+		
+		
+		
+//==================================== ELM72xx ==================================================================			
+	310:// **********************  Execute CoE read to get selectet store mode (Drive, Encoder) *****************************************	
+		IF THIS^.Axis.DriveAddress.Channel = 0 THEN
+			fbCoERead.Index				:= 16#8000;
+			fbCoERead.SubIndex			:= 16#0D; 
+		ELSIF THIS^.Axis.DriveAddress.Channel = 1 THEN
+			fbCoERead.Index				:= 16#8100;
+			fbCoERead.SubIndex			:= 16#0D; 
+		END_IF
+	
+		//Only execute the eReadPositionOffsetMemory if unknown.							
+		fbCoERead.Execute			:= TRUE; 
+		fbCoERead.pDstBuf			:= ADR(eReadFromCoe);
+		fbCoERead.BufLen			:= SIZEOF(eReadFromCoe);
+		nSeqCoE := 311;
+		
+	311:// ********************** read the offset memory location *****************************************	
+		IF fbCoERead.Error THEN
+			nSeqCoE := nSeqCoE + 1000;
+		ELSIF NOT fbCoERead.Busy THEN
+			fbCoERead.Execute := FALSE; 
+			IF eReadFromCoe = 0 THEN 
+				//If offset_disabled selectet in the axis Paramter, Do only set Position in NC Groupe
+				nSeqCoE := 800;	
+			ELSE
+				nSeqCoE := 312;	
+			END_IF		
+		END_IF
+		
+	312:// **********************  Execute ELM72xx SetPosition *****************************************	
+		(*	Enum Value	Description
+			2 (0x02)	drive_memory
+			1 (0x01)	encoder_memory
+			0 (0x00)	offset_disabled	
+			
+		
+		TYPE E_PositionOffsetMemory :(
+			 ePositionOffsetMemory_Encoder := 0
+			 ePositionOffsetMemory_Drive   := 1
+		) BYTE;
+		END_TYPE *)
+		
+		eReadPositionOffsetMemory := UINT_TO_BYTE(eReadFromCoe - 1);
+		
+		fbSetPosEL72xxx.Execute		:= TRUE; 
+		fbSetPosEL72xxx.Position	:= THIS^.fPosition; 
+		fbSetPosEL72xxx.Relative	:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		fbSetPosEL72xxx.Feedback	:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbSetPosEL72xxx.Memory		:= eReadPositionOffsetMemory; 
+		nSeqCoE 					:= 313;
+		
+	313:// **********************  Execute ELM72xx SetPosition - done  *****************************************
+		THIS^.Done					:= NOT fbSetPosEL72xxx.Busy AND NOT fbSetPosEL72xxx.Error;
+		THIS^.Busy					:= fbSetPosEL72xxx.Busy;
+		THIS^.Error					:= fbSetPosEL72xxx.Error;
+		THIS^.ErrorID				:= fbSetPosEL72xxx.ErrorID;	
+
+
+		
+		
+		
+		
+		
+		
+//==================================== AX8xxx ==================================================================			
+	410:// **********************  Execute CoE read to get selectet store mode (Drive, Encoder) *****************************************	
+		IF THIS^.Axis.DriveAddress.Channel = 0 THEN
+			fbCoERead.Index				:= 16#3007;
+			fbCoERead.SubIndex			:= 16#02; 
+		ELSIF THIS^.Axis.DriveAddress.Channel = 1 THEN
+			fbCoERead.Index				:= 16#3407;
+			fbCoERead.SubIndex			:= 16#02; 
+		END_IF
+	
+		//Only execute the eReadPositionOffsetMemory if unknown.							
+		fbCoERead.Execute			:= TRUE; 
+		fbCoERead.pDstBuf			:= ADR(eReadFromCoe);
+		fbCoERead.BufLen			:= SIZEOF(eReadFromCoe);
+		nSeqCoE := 411;
+		
+	411:// **********************   read the offset memory location  *****************************************	
+		IF fbCoERead.Error THEN
+			nSeqCoE := nSeqCoE + 1000;
+		ELSIF NOT fbCoERead.Busy THEN
+			fbCoERead.Execute := FALSE; 
+			IF eReadFromCoe = 0 THEN 
+				//If offset_disabled selectet in the axis Paramter, Do only set Position in NC Groupe
+				nSeqCoE := 800;	
+			ELSE
+				nSeqCoE := 412;	
+			END_IF		
+		END_IF
+		
+	412:// **********************  Execute AX8xxx SetPosition *****************************************	
+		(*	CH1:3007:04 CH2:3407:04 Offset additional position actual value source 
+		https://infosys.beckhoff.com/content/1033/ax8xxx_object/8598064523.html 
+			Enum Value	Description
+			2 (0x02)	drive_memory
+			1 (0x01)	encoder_memory
+			0 (0x00)	offset_disabled	
+			
+		
+		TYPE E_PositionOffsetMemory :(
+			 ePositionOffsetMemory_Encoder := 0
+			 ePositionOffsetMemory_Drive   := 1
+		) BYTE;
+		END_TYPE *)
+		
+		eReadPositionOffsetMemory := UINT_TO_BYTE(eReadFromCoe - 1);
+		
+		fbSetPosAX8xxx.Execute		:= TRUE; 
+		fbSetPosAX8xxx.Position		:= THIS^.fPosition; 
+		fbSetPosAX8xxx.Relative		:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		fbSetPosAX8xxx.Feedback		:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbSetPosAX8xxx.Memory		:= eReadPositionOffsetMemory; 
+		nSeqCoE 					:= 413;
+		
+	413:// **********************  Execute AX8xxx SetPosition - done  *****************************************
+		THIS^.Done					:= NOT fbSetPosAX8xxx.Busy AND NOT fbSetPosAX8xxx.Error;
+		THIS^.Busy					:= fbSetPosAX8xxx.Busy;
+		THIS^.Error					:= fbSetPosAX8xxx.Error;
+		THIS^.ErrorID				:= fbSetPosAX8xxx.ErrorID;	
+		
+		
+		
+		
+		
+//==================================== Do NC Setposition if no Memory Mode is selectet in Parameter CH1:3007:02 CH2:3407:02 ==================================================================		
+	800: SetPosNC();
+	
+	
+	
+	
+	
+//==================================== Error ==================================================================		
+	1000..1999:// **********************  CoE Read Error *****************************************		
+		THIS^.Done					:= FALSE;
+		THIS^.Busy					:= FALSE;
+		THIS^.Error					:= TRUE;
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbCoERead.AdsErrId);		
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbCoERead.CANopenErrId);		
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbAdsWrite.ERRID);			
+
+END_CASE
+
+// **********************  Cyclic calls  ************************************************************
+fbSetPosAX8xxx(Axis:= THIS^.Axis);
+fbSetPosEL72xxx(Axis:= THIS^.Axis);
+fbCoERead(Axis:= THIS^.Axis);
+fbAdsWrite();
+{warning restore C0371}
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetPosNC" Id="{f76b6fff-d7b2-4702-a867-f596cf776ba3}">
+      <Declaration><![CDATA[METHOD PRIVATE SetPosNC : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// The warning " Access to VAR_IN_OUT..." can be disabled here. This Methode is private and so only called if the FB IN_OUT_VAR is valid
+{warning disable C0371}
+
+CASE nSeqNC OF
+	0:	// **********************  Init *****************************************
+		fbSetPosNC.Execute		:= FALSE;
+		nSeqNC := 110;
+		
+	110:	// ******************  SetPosition in NC Axis if no hardware linked *****************************************
+		fbSetPosNC.Execute	:= TRUE; 
+		fbSetPosNC.Position	:= THIS^.fPosition; 
+		fbSetPosNC.Mode		:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		nSeqNC := 120;
+
+	120:	// ******************  SetPosition in NC Axis - done  *****************************************
+		THIS^.Done		:= fbSetPosNC.Done;
+		THIS^.Busy		:= fbSetPosNC.Busy;
+		THIS^.Error		:= fbSetPosNC.Error;
+		THIS^.ErrorID	:= fbSetPosNC.ErrorID;	
+		
+END_CASE
+
+
+// **********************  Cyclic calls  ************************************************************
+fbSetPosNC(Axis := THIS^.Axis);		
+
+{warning restore C0371}]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetPosSoE" Id="{8a10670f-9f8b-40df-9e36-6bf41fd1f764}">
+      <Declaration><![CDATA[METHOD PRIVATE SetPosSoE : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// The warning " Access to VAR_IN_OUT..." can be disabled here. This Methode is private and so only called if the FB IN_OUT_VAR is valid
+{warning disable C0371}
+
+CASE nSeqSoE OF
+	0:	// **********************  Init *****************************************
+		fbSetPosAX5xxx.Execute	:= FALSE; 
+		fbSoERead.Execute		:= FALSE;
+		fbAdsWrite.WRITE 		:= FALSE;
+		nSeqSoE := 10;
+	
+	10: // ********************** SetPosition is only posible if axis is disabled **********************
+		IF NOT THIS^.Axis.Status.Disabled THEN
+			nSeqSoE := nSeqSoE + 1000;
+		ELSE
+			nSeqSoE := 50;	
+		END_IF
+		
+		
+	50: // ********************** Re-initialization of the actual NC-encoder position **********************
+		// IF in the Nc is an Offset active (SetPos or MC_Home) then the calculated offset for the Encoder oder Drive is wrong.
+		fbAdsWrite.WRITE			:= TRUE;
+		fbAdsWrite.PORT				:= 501; //NC-Port
+		fbAdsWrite.IDXGRP			:= (16#5200 + THIS^.Axis.NcToPlc.AxisId);//"Index offset" specification for encoder functions (Index group 0x5200 + ID)
+		fbAdsWrite.IDXOFFS			:= 16#1B; //https://infosys.beckhoff.com/content/1033/tc3_ads_intro/713106315.html 
+		fbAdsWrite.LEN				:= 0; //VOID
+		fbAdsWrite.SRCADDR			:= 0; //VOID
+		nSeqSoE := 60;
+
+	60: // ********************** wait for Re-initialization of the actual NC-encoder position **********************
+		IF fbAdsWrite.ERR THEN
+			nSeqSoE := nSeqSoE + 1000;
+		ELSIF NOT fbAdsWrite.Busy THEN
+			fbAdsWrite.WRITE := FALSE;
+			nSeqSoE := 340;				
+		END_IF
+			
+		
+	340:// **********************  Execute SoE read to get selectet store mode (Drive, Encoder) *****************************************							
+		fbSoERead.Execute			:= TRUE; 
+		fbSoERead.Idn				:= (P_0_IDNs + 275);
+		fbSoERead.pDstBuf			:= ADR(eReadFromSoE);
+		fbSoERead.BufLen			:= SIZEOF(eReadFromSoE);
+		fbSoeRead.Element 			:= 16#40;//the value of the parameter
+		nSeqSoE := 341;
+		
+	341:// **********************   read the offset memory location  *****************************************	
+		IF fbSoeRead.Error THEN
+			nSeqSoE := 941;
+		ELSIF NOT fbSoeRead.Busy THEN
+			fbSoeRead.Execute := FALSE; 
+			eReadFromSoE := eReadFromSoE AND 2#1111; //Only need P-0-0275-Position offset control: Feedback 1
+			IF eReadFromSoE = 0 THEN 
+				//If offset_disabled selectet in the axis Paramter, Do only set Position in NC Groupe
+				nSeqSoE := 800;	
+			ELSE
+				nSeqSoE := 345;	
+			END_IF		
+		END_IF
+		
+	345:// **********************  Execute AX5xxx SetPosition *****************************************	
+		(*	P-0-0275-Position offset control / Feedback 1
+		https://infosys.beckhoff.com/content/1033/ax5000_idn_description/1365901707.html
+			Enum Value	Description
+			2 (0x02)	drive_memory
+			1 (0x01)	encoder_memory
+			0 (0x00)	offset_disabled	
+			
+		
+		TYPE E_PositionOffsetMemory :
+			 ePositionOffsetMemory_Encoder := 0
+			 ePositionOffsetMemory_Drive   := 1
+		*)
+		eReadPositionOffsetMemory := UINT_TO_BYTE(eReadFromSoE - 1);
+		
+		fbSetPosAX5xxx.Execute		:= TRUE; 
+		fbSetPosAX5xxx.Position		:= THIS^.fPosition; 
+		fbSetPosAX5xxx.Relative		:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		fbSetPosAX5xxx.Feedback		:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbSetPosAX5xxx.Memory		:= eReadPositionOffsetMemory; 
+		nSeqSoE := 349;
+
+		
+	349:// **********************  Execute AX5xxx SetPosition - done  *****************************************
+		THIS^.Done					:= NOT fbSetPosAX5xxx.Busy AND NOT fbSetPosAX5xxx.Error;
+		THIS^.Busy					:= fbSetPosAX5xxx.Busy;
+		THIS^.Error					:= fbSetPosAX5xxx.Error;
+		THIS^.ErrorID				:= fbSetPosAX5xxx.ErrorID;	
+		
+//=============================== Do NC Setposition if no Memory Mode is selectet in Parameter P_0_IDNs 0275 ==================================================================		
+	800: SetPosNC();
+	
+//=============================== Error ==================================================================		
+	921:// **********************  SoE Read Error *****************************************		
+		THIS^.Done					:= FALSE;
+		THIS^.Busy					:= FALSE;
+		THIS^.Error					:= TRUE;
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbSoERead.AdsErrId);			
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbSoERead.SercosErrId);			
+		THIS^.ErrorID				:= MAX(THIS^.ErrorID, fbAdsWrite.ERRID);			
+	
+END_CASE
+
+// **********************  Cyclic calls  ************************************************************
+fbSetPosAX5xxx(Axis:= THIS^.Axis);
+fbSoERead(Axis:= THIS^.Axis);
+fbAdsWrite();
+
+{warning restore C0371}]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

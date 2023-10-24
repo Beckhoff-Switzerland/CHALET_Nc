@@ -1,0 +1,1547 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_NcAxis" Id="{c3f3b517-fda2-449a-a20f-a5e67bef0aa3}" SpecialFunc="None">
+    <Declaration><![CDATA[// The warning " Interface of overridden methode xxx of base I_xxx doesn't match declaration" can be disabled here. 
+{warning disable C0094 }
+{attribute 'no_explicit_call' := '[FB_NcAxis] Do not call the body - Stick to OOP'}
+FUNCTION_BLOCK FB_NcAxis EXTENDS FB_Adapter_AXIS_REF IMPLEMENTS I_NcAxis_PLC, I_NcAxis_HMI
+VAR
+	{attribute 'hide'}
+	bInitDone : BOOL;
+	
+	//Default Values is used if commandet jerk, acc, dec or velo is 0.
+	{attribute 'hide'}
+	fDefaultVelocity 		: LREAL; // Read during init from NC-Axis-Parameter(init)
+	{attribute 'hide'}
+	fDefaultAcceleration 	: LREAL; // Read during init from NC-Axis-Parameter(init)
+	{attribute 'hide'}
+	fDefaultDeceleration	: LREAL; // Read during init from NC-Axis-Parameter(init)
+	{attribute 'hide'}
+	fDefaultJerk 			: LREAL; // Read during init from NC-Axis-Parameter(init)	
+	
+	//Full axis parameter set
+	{attribute 'hide'}
+	stAxisParameterSet 		: TC2_MC2.ST_AxisParameterSet;
+	
+	
+	//GearIn
+	{attribute 'hide'}
+	ipGearMasterAxis 		: I_Adapter_AXIS_REF;
+
+	//Multigear
+	{attribute 'hide'}
+	ipMultiGearMasterAxis1		: I_Adapter_AXIS_REF;
+	{attribute 'hide'}
+	ipMultiGearMasterAxis2		: I_Adapter_AXIS_REF;
+	{attribute 'hide'}
+	ipMultiGearMasterAxis3		: I_Adapter_AXIS_REF;
+	{attribute 'hide'}
+	ipMultiGearMasterAxis4		: I_Adapter_AXIS_REF;
+
+	{attribute 'hide'}
+	fbDummyAxisRef		: TC2_MC2.AXIS_REF; // AxisRef whitout linked Nc
+	
+	{attribute 'hide'}               	
+	fbFeedback 			: CHALET_BaseComponents.FB_CH_Feedback;
+	
+ 	{attribute 'hide'}                   	
+	eActiveCommand 		: E_NcAxisCommands := E_NcAxisCommands.None;
+	
+	{attribute 'hide'}           	
+	fbPower 			: MC_Power;
+	{attribute 'hide'}
+	fbStop 				: MC_Stop;
+	{attribute 'hide'}
+	fbReset 			: FB_Reset_NC_Sercos_CANopen; 		//MC_Reset extension. can detect sercos and can and reset all faults.
+	{attribute 'hide'}
+	fbSetPosition 		: FB_SetPosition_NC_Sercos_CANopen;	//MC_SetPosition extension. Detect sercos and can and read and use the configured store position of the position feedback.(encoder/drive/NC). Set store position in DM2.
+	{attribute 'hide'}
+	fbMoveRelative 		: ARRAY [0..1] OF MC_MoveRelative;//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	{attribute 'hide'}
+	nActiveMoveRel		: UINT; 
+	{attribute 'hide'}
+	fbMoveAbsolute		: ARRAY [0..1] OF MC_MoveAbsolute;//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	{attribute 'hide'}
+	nActiveMoveAbs		: UINT; 
+	{attribute 'hide'}
+	fbMoveVelocity		: ARRAY [0..1] OF MC_MoveVelocity;//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	{attribute 'hide'}
+	nActiveMoveVel		: UINT; 
+	{attribute 'hide'}
+	fbGearInMultiMaster	: MC_GearInMultiMaster;
+	{attribute 'hide'}
+	fbGearIn 			: MC_GearIn;
+	{attribute 'hide'}
+	fbGearOut 			: MC_GearOut;
+
+	{attribute 'hide'}
+	bNewBufferCommadThisCycle : BOOL; //This flag is processed in the PLC cycle when a buffered motion command is requested via method
+
+
+END_VAR
+{warning restore C0094}]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Folder Name="Command" Id="{db3653fb-675b-439e-94a7-6792f0175b5f}" />
+    <Folder Name="Status" Id="{3df1230d-b774-4094-948e-0f994f8d1a6b}">
+      <Folder Name="Dynamics" Id="{cd0de26d-0512-4c2b-8e7c-6e81a94f35da}" />
+    </Folder>
+    <Property Name="ActAcceleration" Id="{c30e4fd2-649e-4ab3-9d5a-ab819c35ca2c}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{b1f69761-3705-412d-b483-95fadef3bfda}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActAcceleration := THIS^.Axis.NcToPlc.ActAcc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActPosition" Id="{a361fb61-bcbd-4f75-b030-09b94cbf98ce}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActPosition : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{378cabfa-a150-44d0-a0f6-1cabaa105788}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActPosition := THIS^.Axis.NcToPlc.ActPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActPosModulo" Id="{6fa22576-fa7a-4d90-8ee0-6cac757be744}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActPosModulo : LREAL]]></Declaration>
+      <Get Name="Get" Id="{baf32302-cee6-458e-a6c4-1ff27ac5cf41}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActPosModulo := THIS^.Axis.NcToPlc.ModuloActPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActVelocity" Id="{383d07d4-c9ec-48ce-8f4a-0dd1ba6ab065}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY ActVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{c878b659-99ba-4cb2-8eef-288ebac4ebf4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActVelocity := THIS^.Axis.NcToPlc.ActVelo;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="BufferEmpty" Id="{3e0db1e3-59d3-4fda-a6d2-3811737b5e35}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY BufferEmpty : BOOL;]]></Declaration>
+      <Get Name="Get" Id="{e36b6bf9-33a9-42ee-90c0-5f52f1584884}">
+        <Declaration><![CDATA[VAR
+	nCtsBusyCommands : UINT;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.Prepare();//Prepare time-critical information, if not already done
+
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveRelative[0].Busy);
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveRelative[1].Busy);
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveAbsolute[0].Busy);
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveAbsolute[1].Busy);
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveVelocity[0].Busy);
+nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveVelocity[1].Busy);
+BufferEmpty := NOT bNewBufferCommadThisCycle AND NOT Axis.Status.CmdBuffered AND nCtsBusyCommands < 2; 
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Busy" Id="{e8f99efc-ff15-4755-848a-5604a6b9cc6c}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c17c601e-d4c3-425e-90bb-82a63b791f3d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Busy := THIS^.fbFeedback.Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Coupled" Id="{1c45a1cc-614a-48df-8c20-c48383b970f1}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Coupled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{f69933d8-309a-416a-b24a-d9a7075d938c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.Prepare();//Prepare time-critical information, if not already done
+
+Coupled := THIS^.Axis.Status.Coupled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DefaultAcceleration" Id="{09bba2d0-aaf6-45ff-983d-ae4bc5fac5fd}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{f00c799e-4ef8-4927-9312-e4fd184810c6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DefaultAcceleration := THIS^.fDefaultAcceleration;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3089c40a-aa75-443d-be74-f059fc7d74f7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.fDefaultAcceleration := DefaultAcceleration;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="DefaultDeceleration" Id="{c731a55b-0aff-488d-8d9d-c095e8cd09a5}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultDeceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{4c07fdf5-231f-4ab2-bcfb-436c74b7f5f7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DefaultDeceleration := THIS^.fDefaultDeceleration;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a8727c6a-e237-4cc4-8a0e-b3dd00338f5b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.fDefaultDeceleration := DefaultDeceleration;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="DefaultJerk" Id="{5de20c48-5240-4674-91fe-83cd78079303}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY DefaultJerk : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{1f00d6cd-488a-4b08-8967-199d2a3baf9b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DefaultJerk := THIS^.fDefaultJerk;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1c394a3c-c6b4-4eb5-831f-0c010b68db64}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.fDefaultJerk := DefaultJerk;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="DefaultVelocity" Id="{a80870b6-0774-46d2-bc90-9c3b42ff8cf6}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+//This value is used if commanded velocity is 0. Initvalue: Nc parameter manual velocity maximum
+PROPERTY DefaultVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{32bb60f8-b48f-41f5-8d9a-45532d48cd1e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DefaultVelocity := THIS^.fDefaultVelocity;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{37139e13-fb94-49d2-99ca-b2b0c5b69896}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.fDefaultVelocity := DefaultVelocity;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="Done" Id="{40217848-2b2a-4bc4-a4ea-a3653cee9f9b}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Done : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8bc2d795-7b3e-455d-b75c-3273dd910ce2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Done := THIS^.fbFeedback.Done;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Error" Id="{5dac4650-4100-4ac8-a1fa-4b3b88373326}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ceec6dfe-7aaf-4631-8a12-7648af7fee6b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error := THIS^.fbFeedback.Error;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FB_init" Id="{3fa7c2bb-b162-4c44-8fa2-bc4962432f45}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Do the following code only during start up and not during onlinechange
+IF bInitRetains THEN 
+	
+
+	THIS^.fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);	
+
+
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Feedback" Id="{954d8ce5-42ec-488a-8d2b-055311628941}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Feedback : I_CH_Feedback]]></Declaration>
+      <Get Name="Get" Id="{c578c9ee-183c-4ed5-8409-8f1484ad5ec4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Feedback := THIS^.fbFeedback;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="GearIn" Id="{acd305e1-9abd-43a4-8a46-b91c3caadb8c}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA connection
+(*! 
+<summary>
+	Establish an axis coupling to a single master axis.
+	<preliminary>
+		Both axis must be in standstill to apply the coupling.
+		In-motion coupling of the FB is not supported by this method.
+	</preliminary>
+</summary>
+<description>
+	The coupling is performed based on a <b>velocity</b> ratio.
+	As reference the master axis <b>command</b> value is used.
+	There is <b>no automatic phase compensation</b> applied.
+	
+	<h3> Missing features </h3>
+	<ul> 
+		<li> - </li>
+		<li> - </li>
+	</ul>
+</description> 
+*)
+
+METHOD PUBLIC GearIn  : I_CH_Feedback (*! Interface to the execution feedback *)
+VAR_INPUT
+	(*! Interface to a master axis *)
+	ipMasterAxisAdapter : I_Adapter_AXIS_REF;
+
+	(*! Gear ratio Numerator*)
+	fRatioNumerator: LREAL;
+	
+	(*! Gear ratio Denominator*)
+	nRatioDenominator: UINT;
+	
+	(*! Use the default dynamics if input=0.
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(*! Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(*! Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ipMasterAxisAdapter = 0 THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error not valid Input
+	
+ELSIF NOT __ISVALIDREF(ipMasterAxisAdapter.getAxisRef) THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Invalide ref to axis
+	
+ELSIF fRatioNumerator = 0 OR nRatioDenominator = 0 THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error not valid Input		
+	
+ELSIF THIS^.fbFeedback.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF ipMasterAxisAdapter.getAxisRef.Status.Moving THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Only support geraring in standstill
+
+ELSIF THIS^.Axis.Status.Moving THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
+	//Only support geraring in standstill
+
+ELSE
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.GearIn;
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	
+	THIS^.ipGearMasterAxis 				:= ipMasterAxisAdapter;
+	
+	THIS^.fbGearIn.Execute				:= TRUE;
+	THIS^.fbGearIn.RatioNumerator 		:= fRatioNumerator;	
+	THIS^.fbGearIn.RatioDenominator     := nRatioDenominator;		
+	
+	//Acceleration
+	//If input = 0  then use default dynamics
+	IF fAcceleration = 0.0 THEN
+		THIS^.fbGearIn.Acceleration := THIS^.fDefaultAcceleration;
+	ELSE
+		THIS^.fbGearIn.Acceleration := fAcceleration;
+	END_IF
+	
+	//Deceleration
+	//If input = 0  then use default dynamics
+	IF fDeceleration = 0.0 THEN
+		THIS^.fbGearIn.Deceleration := THIS^.fDefaultDeceleration;
+	ELSE
+		THIS^.fbGearIn.Deceleration := fDeceleration;
+	END_IF
+	
+	//Jerk
+	//If input = 0  then use default dynamics
+	IF fJerk = 0.0 THEN
+		THIS^.fbGearIn.Jerk := THIS^.fDefaultJerk;
+	ELSE
+		THIS^.fbGearIn.Jerk := fJerk;
+	END_IF
+END_IF
+
+
+GearIn := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GearOut" Id="{c325e218-66a1-4c7e-b618-e3562cd69457}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD GearOut  : I_CH_Feedback
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (THIS^.fbFeedback.HR = S_OK) THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSE
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.GearOut;
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+	THIS^.fbFeedback.Busy 				:= TRUE;
+
+	THIS^.fbGearOut.Execute				:= TRUE;
+
+	THIS^.ipGearMasterAxis 				:= 0;
+	THIS^.ipMultiGearMasterAxis1 		:= 0;
+	THIS^.ipMultiGearMasterAxis2 		:= 0;
+	THIS^.ipMultiGearMasterAxis3 		:= 0;
+	THIS^.ipMultiGearMasterAxis4 		:= 0;
+	
+END_IF
+
+
+
+GearOut := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Initialize" Id="{d41fa56e-09ad-452f-ad55-c5035cc0c481}">
+      <Declaration><![CDATA[METHOD Initialize : HRESULT
+VAR_INST
+	fbReadDriveAddress	: MC_ReadDriveAddress;
+	fbReadParameterSet 	: MC_ReadParameterSet;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT THIS^.bInitDone THEN
+	Initialize := S_PENDING;
+	fbFeedback.ActiveCommand := 'Init';
+	
+	// Check if link to NC is mapped
+	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND_THEN F_GetMappingStatus(ADR(THIS^.Axis.NcToPlc), SIZEOF(THIS^.Axis.NcToPlc)) <> EPlcMappingStatus.MS_Mapped THEN
+		//ERROR NcToPlc
+		Initialize := E_FAIL;
+		RETURN;
+	END_IF
+	
+	
+	// Check if link to NC is mapped
+	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND_THEN F_GetMappingStatus(ADR(THIS^.Axis.PlcToNc), SIZEOF(THIS^.Axis.PlcToNc)) <> EPlcMappingStatus.MS_Mapped THEN
+		//ERROR PlcToNc
+		Initialize := E_FAIL;		
+		RETURN;
+	END_IF	
+	
+	
+	// Check and wait until NC Task is in a valid running state
+	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND THIS^.Axis.NcToPlc.AxisId = 0 THEN
+		//ERROR PlcToNc
+		RETURN;
+	END_IF
+	
+	
+	// Get Drive Address on startup  	
+	fbReadDriveAddress(
+		Axis:= THIS^.Axis, 
+		Execute:= NOT (fbReadDriveAddress.Busy OR fbReadDriveAddress.Done),
+		DriveAddress=> THIS^.Axis.DriveAddress);
+		
+		
+	// Read all axis parameter on startup
+	fbReadParameterSet(
+		Parameter:= stAxisParameterSet, 
+		Axis:= THIS^.Axis, 
+		Execute:= NOT (fbReadParameterSet.Busy OR fbReadParameterSet.Done), 
+		ErrorID=> );
+		
+		
+	// Store default values of parameterset in local variabels
+	IF fbReadParameterSet.Done THEN
+		fDefaultVelocity 		:= THIS^.stAxisParameterSet.fVeloFastManual;
+		fDefaultAcceleration 	:= THIS^.stAxisParameterSet.fAcceleration;
+		fDefaultDeceleration 	:= THIS^.stAxisParameterSet.fDeceleration;
+		fDefaultJerk 			:= THIS^.stAxisParameterSet.fJerk;	
+	END_IF
+	
+		
+	// Set init done signal  
+	THIS^.bInitDone := fbReadDriveAddress.Done AND fbReadParameterSet.Done;
+		
+ELSE
+	Initialize := S_OK;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="LagDistance" Id="{3172a7dc-dce9-4d25-b7f0-07ba9370df67}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY LagDistance : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{6df7de8b-555b-4632-aec2-349720d82107}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[LagDistance := THIS^.Axis.NcToPlc.PosDiff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="MotionState" Id="{a2dcbfb3-1ec7-43de-b40f-e3e18ca908f4}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY MotionState : Tc2_MC2.MC_AxisStates
+]]></Declaration>
+      <Get Name="Get" Id="{3fe31aba-93b8-4931-83a8-59a93f221c89}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.Prepare();//Prepare time-critical information, if not already done
+
+MotionState := THIS^.Axis.Status.MotionState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="MoveAbsolute" Id="{7106f51a-dfea-4823-a083-3f2ff6e3e221}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveAbsolute  : I_CH_Feedback
+VAR_INPUT
+	fPosition		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+VAR
+	nInactiveInstance : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF NOT THIS^.BufferEmpty THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command	
+	
+ELSIF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.DiscreteMotion OR THIS^.Axis.Status.ContinuousMotion OR THIS^.Axis.Status.SynchronizedMotion) THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Axis in wrong State
+	
+ELSIF (eBufferMode <> MC_BufferMode.MC_Aborting) AND bNewBufferCommadThisCycle THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command		
+	//Max send one buffered motion command each cycle	
+	
+ELSE
+	//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	IF THIS^.fbMoveAbsolute[nActiveMoveAbs].Busy THEN
+		nInactiveInstance := (THIS^.nActiveMoveAbs + 1)MOD 2;
+	ELSE
+		nInactiveInstance := THIS^.nActiveMoveAbs;
+	END_IF
+	
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveAbsolute;
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;		
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	
+	THIS^.fbMoveAbsolute[nInactiveInstance].Execute		:= TRUE;
+	THIS^.fbMoveAbsolute[nInactiveInstance].Position	:= fPosition;
+	THIS^.fbMoveAbsolute[nInactiveInstance].BufferMode 	:= eBufferMode;
+	
+	//If the currend command is a buffered movement, then set a flag.
+	IF eBufferMode <> MC_BufferMode.MC_Aborting THEN
+		THIS^.bNewBufferCommadThisCycle := TRUE;
+	END_IF
+	
+	//Velocity
+	//If input = 0  then use default dynamics
+	IF fVelocity = 0.0 THEN
+		THIS^.fbMoveAbsolute[nInactiveInstance].Velocity := THIS^.fDefaultVelocity;
+	ELSE
+		THIS^.fbMoveAbsolute[nInactiveInstance].Velocity := fVelocity;
+	END_IF
+	
+	//Acceleration
+	//If input = 0  then use default dynamics
+	IF fAcceleration = 0.0 THEN
+		THIS^.fbMoveAbsolute[nInactiveInstance].Acceleration := THIS^.fDefaultAcceleration;
+	ELSE
+		THIS^.fbMoveAbsolute[nInactiveInstance].Acceleration := fAcceleration;
+	END_IF
+	
+	//Deceleration
+	//If input = 0  then use default dynamics
+	IF fDeceleration = 0.0 THEN
+		THIS^.fbMoveAbsolute[nInactiveInstance].Deceleration := THIS^.fDefaultDeceleration;
+	ELSE
+		THIS^.fbMoveAbsolute[nInactiveInstance].Deceleration := fDeceleration;
+	END_IF
+	
+	//Jerk
+	//If input = 0  then use default dynamics
+	IF fJerk = 0.0 THEN
+		THIS^.fbMoveAbsolute[nInactiveInstance].Jerk := THIS^.fDefaultJerk;
+	ELSE
+		THIS^.fbMoveAbsolute[nInactiveInstance].Jerk := fJerk;
+	END_IF
+
+END_IF
+
+
+MoveAbsolute := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveRelative" Id="{32a1b8ba-8df4-4089-a99d-6c388207494c}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveRelative  : I_CH_Feedback
+VAR_INPUT
+	fDistance		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+VAR
+	nInactiveInstance : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF NOT THIS^.BufferEmpty THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command	
+	
+ELSIF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.DiscreteMotion OR THIS^.Axis.Status.ContinuousMotion OR THIS^.Axis.Status.SynchronizedMotion) THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Axis in wrong State
+
+ELSIF (eBufferMode <> MC_BufferMode.MC_Aborting) AND bNewBufferCommadThisCycle THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command		
+	//Max send one buffered motion command each cycle	
+		
+	
+//ZZZ Todo Bug in 4024, only allow buffered movement if an 'normal' movement is active.	
+ELSIF (eBufferMode <> MC_BufferMode.MC_Aborting) AND NOT THIS^.Axis.Status.HasJob THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffered movement not possible if axis is not moving
+	
+ELSE
+	//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	IF THIS^.fbMoveRelative[nActiveMoveRel].Busy THEN
+		nInactiveInstance := (THIS^.nActiveMoveRel + 1)MOD 2;
+	ELSE
+		nInactiveInstance := THIS^.nActiveMoveRel;
+	END_IF
+
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveRelative;
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;                                  
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	                                    
+	THIS^.fbMoveRelative[nInactiveInstance].Execute		:= TRUE;
+	THIS^.fbMoveRelative[nInactiveInstance].Distance	:= fDistance;
+	THIS^.fbMoveRelative[nInactiveInstance].BufferMode 	:= eBufferMode;
+	
+	//If the currend command is a buffered movement, then set a flag.
+	IF eBufferMode <> MC_BufferMode.MC_Aborting THEN
+		THIS^.bNewBufferCommadThisCycle := TRUE;
+	END_IF
+	
+	//Velocity
+	//If input = 0  then use default dynamics
+	IF fVelocity = 0.0 THEN
+		THIS^.fbMoveRelative[nInactiveInstance].Velocity := THIS^.fDefaultVelocity;
+	ELSE
+		THIS^.fbMoveRelative[nInactiveInstance].Velocity := fVelocity;
+	END_IF
+	
+	//Acceleration
+	//If input = 0  then use default dynamics
+	IF fAcceleration = 0.0 THEN
+		THIS^.fbMoveRelative[nInactiveInstance].Acceleration := THIS^.fDefaultAcceleration;
+	ELSE
+		THIS^.fbMoveRelative[nInactiveInstance].Acceleration := fAcceleration;
+	END_IF
+	
+	//Deceleration
+	//If input = 0  then use default dynamics
+	IF fDeceleration = 0.0 THEN
+		THIS^.fbMoveRelative[nInactiveInstance].Deceleration := THIS^.fDefaultDeceleration;
+	ELSE
+		THIS^.fbMoveRelative[nInactiveInstance].Deceleration := fDeceleration;
+	END_IF
+	
+	//Jerk
+	//If input = 0  then use default dynamics
+	IF fJerk = 0.0 THEN
+		THIS^.fbMoveRelative[nInactiveInstance].Jerk := THIS^.fDefaultJerk;
+	ELSE
+		THIS^.fbMoveRelative[nInactiveInstance].Jerk := fJerk;
+	END_IF
+END_IF
+
+
+MoveRelative := THIS^.fbFeedback;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveVelocity" Id="{0362c3a9-d52b-4a38-a779-ce7fc689e5aa}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MoveVelocity  : I_CH_Feedback
+VAR_INPUT
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fVelocity		: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+	
+	(* If input=1, then direction is positive. 
+	Positive OR negative direction of travel (TYPE: Tc2_MC2.MC_Direction) *)
+	eDirection: Tc2_MC2.MC_Direction;
+	
+	(* Input=0 = MC_Aborting   
+	BufferModes:
+		-MC_Aborting: Default mode without buffering. The command is executed immediately and interrupts any other command that may be running.
+		-MC_Buffered: The command is executed once no other command is running on the axis. The previous movement continues until it has stopped. The following command is started from standstill.
+		-MC_BlendingLow: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the lower velocity of two commands.
+		-MC_BlendingHigh The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the higher velocity of two commands.
+		-MC_BlendingNext: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the last command.
+		-MC_BlendingPrevious: The command is executed once no other command is running on the axis. In contrast to Buffered the axis does not stop at the previous target, but passes through this position with the velocity of the first command. *)
+	eBufferMode   : Tc2_MC2.MC_BufferMode;
+END_VAR
+VAR
+	nInactiveInstance : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF NOT THIS^.BufferEmpty THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command	
+	
+ELSIF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.DiscreteMotion OR THIS^.Axis.Status.ContinuousMotion OR THIS^.Axis.Status.SynchronizedMotion) THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Axis in wrong State
+
+ELSIF (eBufferMode <> MC_BufferMode.MC_Aborting) AND bNewBufferCommadThisCycle THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command		
+	//Max send one buffered motion command each cycle	
+	
+	
+ELSE
+	//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
+	IF THIS^.fbMoveVelocity[nActiveMoveVel].Busy THEN
+		nInactiveInstance := (THIS^.nActiveMoveVel + 1)MOD 2;
+	ELSE
+		nInactiveInstance := THIS^.nActiveMoveVel;
+	END_IF
+	
+	//Direction 0 is not an valide enumeration. If input=0, then default direction is positive
+	IF eDirection = 0 THEN
+		eDirection := Tc2_MC2.MC_Direction.MC_Positive_Direction;
+	END_IF
+	
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveVelocity;	
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;	
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	
+	THIS^.fbMoveVelocity[nInactiveInstance].Execute		:= TRUE;	
+	THIS^.fbMoveVelocity[nInactiveInstance].Direction		:= eDirection; 	
+	THIS^.fbMoveVelocity[nInactiveInstance].BufferMode		:= eBufferMode; 	
+	
+	//If the currend command is a buffered movement, then set a flag.
+	IF eBufferMode <> MC_BufferMode.MC_Aborting THEN
+		THIS^.bNewBufferCommadThisCycle := TRUE;
+	END_IF
+	
+	//Velocity
+	//If input = 0  then use default dynamics
+	IF fVelocity = 0.0 THEN
+		THIS^.fbMoveVelocity[nInactiveInstance].Velocity := THIS^.fDefaultVelocity;
+	ELSE
+		THIS^.fbMoveVelocity[nInactiveInstance].Velocity := fVelocity;
+	END_IF
+	
+	//Acceleration
+	//If input = 0  then use default dynamics
+	IF fAcceleration = 0.0 THEN
+		THIS^.fbMoveVelocity[nInactiveInstance].Acceleration := THIS^.fDefaultAcceleration;
+	ELSE
+		THIS^.fbMoveVelocity[nInactiveInstance].Acceleration := fAcceleration;
+	END_IF
+	
+	//Deceleration
+	//If input = 0  then use default dynamics
+	IF fDeceleration = 0.0 THEN
+		THIS^.fbMoveVelocity[nInactiveInstance].Deceleration := THIS^.fDefaultDeceleration;
+	ELSE
+		THIS^.fbMoveVelocity[nInactiveInstance].Deceleration := fDeceleration;
+	END_IF
+	
+	//Jerk
+	//If input = 0  then use default dynamics
+	IF fJerk = 0.0 THEN
+		THIS^.fbMoveVelocity[nInactiveInstance].Jerk := THIS^.fDefaultJerk;
+	ELSE
+		THIS^.fbMoveVelocity[nInactiveInstance].Jerk := fJerk;
+	END_IF
+END_IF
+
+
+MoveVelocity := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Moving" Id="{1b9c6e7d-1088-4872-9d9d-5b6ee6583b90}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY Moving : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{9cb39d19-31bd-4ebc-9565-60cc863c2c90}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.Prepare();//Prepare time-critical information, if not already done
+
+Moving := THIS^.Axis.Status.Moving;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="MultiGearIn" Id="{ab289138-badb-43cc-85a4-6d5acff7667d}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD MultiGearIn : I_CH_Feedback
+VAR_INPUT
+	(* Interface to an master axis *)
+	ipMasterAxisAdapter : I_Adapter_AXIS_REF;
+	
+	(* Gear ratio Numerator*)
+	fRatioNumerator: LREAL;
+	(* Gear ratio Denominator*)
+	nRatioDenominator: UINT;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fAcceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration	: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk			: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ipMasterAxisAdapter = 0 THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error not valid Input
+	
+ELSIF NOT __ISVALIDREF(ipMasterAxisAdapter.getAxisRef) THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Invalide ref to axis
+	
+ELSIF fRatioNumerator = 0 OR nRatioDenominator = 0 THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error not valid Input	
+
+ELSIF THIS^.fbFeedback.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF ipMasterAxisAdapter.getAxisRef.Status.Moving THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Only support geraring in standstill
+
+ELSIF THIS^.Axis.Status.Moving THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
+	//Only support geraring in standstill
+	
+ELSE
+	THIS^.eActiveCommand 					:= E_NcAxisCommands.MultiGearIn;
+	THIS^.fbFeedback.LastCommandAccepted	:= TRUE;
+	THIS^.fbFeedback.Busy 					:= TRUE;
+	
+	IF (THIS^.ipMultiGearMasterAxis1=0) OR (THIS^.ipMultiGearMasterAxis1=ipMasterAxisAdapter) THEN
+		THIS^.ipMultiGearMasterAxis1 				:= ipMasterAxisAdapter;
+		THIS^.fbGearInMultiMaster.GearRatio1 		:= (fRatioNumerator/nRatioDenominator);
+	ELSIF (THIS^.ipMultiGearMasterAxis2=0) OR (THIS^.ipMultiGearMasterAxis2=ipMasterAxisAdapter)  THEN
+		THIS^.ipMultiGearMasterAxis2 				:= ipMasterAxisAdapter;
+		THIS^.fbGearInMultiMaster.GearRatio2 		:= (fRatioNumerator/nRatioDenominator);
+	ELSIF (THIS^.ipMultiGearMasterAxis3=0) OR (THIS^.ipMultiGearMasterAxis3=ipMasterAxisAdapter)  THEN
+		THIS^.ipMultiGearMasterAxis3 				:= ipMasterAxisAdapter;
+		THIS^.fbGearInMultiMaster.GearRatio3 		:= (fRatioNumerator/nRatioDenominator);
+	ELSIF (THIS^.ipMultiGearMasterAxis4=0) OR (THIS^.ipMultiGearMasterAxis4=ipMasterAxisAdapter)  THEN
+		THIS^.ipMultiGearMasterAxis4 				:= ipMasterAxisAdapter;
+		THIS^.fbGearInMultiMaster.GearRatio4 		:= (fRatioNumerator/nRatioDenominator);
+	ELSE
+		//List is full. Only Multigeat up to 4 axis
+		;
+	END_IF
+
+	
+	// Open existing gear to couple a new
+	THIS^.fbGearOut.Execute		:= TRUE;
+	
+	//Acceleration
+	//If input = 0  then use default dynamics
+	IF fAcceleration = 0.0 THEN
+		THIS^.fbGearInMultiMaster.Acceleration := THIS^.fDefaultAcceleration;
+	ELSE
+		THIS^.fbGearInMultiMaster.Acceleration := fAcceleration;
+	END_IF
+	
+	//Deceleration
+	//If input = 0  then use default dynamics
+	IF fDeceleration = 0.0 THEN
+		THIS^.fbGearInMultiMaster.Deceleration := THIS^.fDefaultDeceleration;
+	ELSE
+		THIS^.fbGearInMultiMaster.Deceleration := fDeceleration;
+	END_IF
+	
+	//Jerk
+	//If input = 0  then use default dynamics
+	IF fJerk = 0.0 THEN
+		THIS^.fbGearInMultiMaster.Jerk := THIS^.fDefaultJerk;
+	ELSE
+		THIS^.fbGearInMultiMaster.Jerk := fJerk;
+	END_IF
+END_IF
+
+
+
+MultiGearIn := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="NcAxisName" Id="{b43921d1-43bf-4616-b554-93cb344ed854}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcAxisName : String(31)]]></Declaration>
+      <Get Name="Get" Id="{25e04b83-5480-4de2-b32b-619c584368bf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[NcAxisName := THIS^.stAxisParameterSet.sAxisName;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="NcAxisType" Id="{41b40ea4-38a3-4a09-98dd-a04b3f6c3148}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcAxisType : Tc2_MC2.E_NcAxisType]]></Declaration>
+      <Get Name="Get" Id="{ab252ce9-4b54-4e49-a94b-13fad87670da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[NcAxisType := THIS^.stAxisParameterSet.nAxisType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="NcDriveType" Id="{2c2d7f2d-90da-4aef-8657-0ccda0d9d6da}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcDriveType : Tc2_MC2.E_NcDriveType]]></Declaration>
+      <Get Name="Get" Id="{69ccd5c8-8fee-40ce-8958-09230a0f8afa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[NcDriveType:= THIS^.Axis.DriveAddress.NcDriveType;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="OID" Id="{879b1cd5-66b0-4ccc-8c0d-58ed0c327ea3}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY OID : OTCID]]></Declaration>
+      <Get Name="Get" Id="{daad09c2-d294-4d30-a5c0-fcb1a51999e2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OID := THIS^.Axis.DriveAddress.TcAxisObjectId;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="PowerOff" Id="{9a452813-5a35-4350-bab6-078d681be04e}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD PowerOff  : I_CH_Feedback
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//No IF. Allways allow to disable the power
+THIS^.eActiveCommand 				:= E_NcAxisCommands.PowerOff;	
+THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+THIS^.fbFeedback.Busy 				:= TRUE;	
+
+THIS^.fbPower.Enable				:= FALSE;
+THIS^.fbPower.Enable_Positive		:= FALSE;
+THIS^.fbPower.Enable_Negative		:= FALSE;
+THIS^.fbPower.Override				:= 0.0; 
+
+
+
+PowerOff := THIS^.fbFeedback;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PowerOn" Id="{52230cb1-4543-4d35-9c9a-fa7e1af9ddcc}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD PowerOn : I_CH_Feedback
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (THIS^.fbFeedback.HR = S_OK) THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF NOT(THIS^.Axis.Status.Disabled) THEN	
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
+	//Axis in wrong State
+	
+ELSE
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.PowerOn;     
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;                        	
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	                                	
+	THIS^.fbPower.Enable				:= TRUE;
+	THIS^.fbPower.Enable_Positive		:= TRUE;
+	THIS^.fbPower.Enable_Negative		:= TRUE;
+	THIS^.fbPower.Override				:= 100.0; 
+END_IF
+
+
+
+PowerOn := THIS^.fbFeedback;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Prepare" Id="{830cd829-269e-4a75-b885-8d9703f9f985}">
+      <Declaration><![CDATA[(* 
+	Use this Methode to calculate time sensitive date once each cycle. Example: read analog input and convert before do get Signal propertie
+*)
+METHOD PROTECTED Prepare : HRESULT
+VAR_INST
+	{attribute 'hide'}	
+	nLastUpdatedCycleCount : UDINT;
+	{attribute 'hide'}	
+	fbTriggerError		: R_TRIG;
+	{attribute 'hide'}	
+	fbMessageNcError			: FB_TcMessage;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Check if this Cycle the dates are allready prepared. This is important for time sensitive informations.
+IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex].CycleCount THEN
+	nLastUpdatedCycleCount := TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex].CycleCount ;
+
+	// Refresh Axis Information 
+	Axis.ReadStatus();
+	
+	//Write NC-Error in TC3 Eventlogger
+	fbTriggerError(CLK:= THIS^.Axis.NcToPlc.StateDWord.31 );
+	IF fbTriggerError.Q THEN
+		fbMessageNcError.Create(TC_EVENT_CLASSES.Tc3_NcErrorCodes, THIS^.Axis.NcToPlc.ErrorCode, TcEventSeverity.Error, THIS^.fbSourceInfo);
+		fbMessageNcError.Send(0);
+		fbMessageNcError.Release();
+	END_IF
+
+END_IF
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{2b6612f0-7b9c-4978-ba64-ffd0d29f55f3}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD Reset : I_CH_Feedback
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.fbFeedback.Busy THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Axis has an aktive Job
+	
+	
+ELSE
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.Reset;	
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	
+	THIS^.fbReset.Execute				:= TRUE;
+
+END_IF
+Reset := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="SetAcceleration" Id="{3c9af9b1-cd1e-4786-8772-5e6b7500d2a8}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{b456e8af-dd8e-48b4-abb4-525bee899349}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SetAcceleration := THIS^.Axis.NcToPlc.SetAcc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="SetActPosition" Id="{8e1729dc-bfd9-4993-affb-df5d02baa8d5}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD SetActPosition : I_CH_Feedback
+VAR_INPUT
+	fPosition: LREAL;//Absolute
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.Disabled OR THIS^.Axis.Status.ErrorStop) THEN	
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
+	//Axis in wrong State
+	
+ELSIF THIS^.Axis.Status.Coupled THEN	
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
+	//Axis is in gear
+	
+ELSE
+	THIS^.eActiveCommand 					:= E_NcAxisCommands.SetPosition;
+	THIS^.fbFeedback.LastCommandAccepted	:= TRUE;
+	THIS^.fbFeedback.Busy 					:= TRUE;
+	                                    	
+	THIS^.fbSetPosition.Execute				:= TRUE;
+	THIS^.fbSetPosition.Position			:= fPosition;	
+	THIS^.fbSetPosition.Mode				:= FALSE;	//FALSE=Absolute	
+END_IF
+
+
+SetActPosition := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="SetPosition" Id="{bdd57447-36bc-417d-ba76-972629251596}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetPosition : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{c31fd96f-fac9-42fb-97fe-995c23ed885e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SetPosition := THIS^.Axis.NcToPlc.SetPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="SetPosModulo" Id="{e036a154-143a-48d4-a468-d5e53a0d776b}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetPosModulo : LREAL]]></Declaration>
+      <Get Name="Get" Id="{e34d01f8-ca46-4d29-9dbe-c134c8e786d9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SetPosModulo := THIS^.Axis.NcToPlc.ModulosetPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="SetVelocity" Id="{d58984c2-3c95-4b6b-93c2-d9cdb7a0dfe5}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{3cd660db-a537-483a-8188-3a077e3cdd53}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SetVelocity := THIS^.Axis.NcToPlc.SetVelo;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Stop" Id="{acdb5625-d23f-4506-8419-1c6877dd8016}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+METHOD Stop : I_CH_Feedback
+VAR_INPUT
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fDeceleration: LREAL;
+	
+	(* Use the default dynamics if input=0. 
+	The default dynamics can be read and written via property and is initialized with the default values in the NC parameter list. *)
+	fJerk: LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//No IF. Allways allow to stop the ax
+THIS^.eActiveCommand 				:= E_NcAxisCommands.Stop;
+THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+THIS^.fbFeedback.Busy 				:= TRUE;	
+
+THIS^.fbStop.Execute				:= TRUE;
+
+//open gear
+THIS^.ipGearMasterAxis 				:= 0;
+THIS^.ipMultiGearMasterAxis1 		:= 0;
+THIS^.ipMultiGearMasterAxis2 		:= 0;
+THIS^.ipMultiGearMasterAxis3 		:= 0;
+THIS^.ipMultiGearMasterAxis4 		:= 0;
+	
+//Deceleration
+//If input = 0  then use default dynamics
+IF fDeceleration = 0.0 THEN
+	THIS^.fbStop.Deceleration := THIS^.fDefaultDeceleration;
+ELSE
+	THIS^.fbStop.Deceleration := fDeceleration;
+END_IF
+
+//Jerk
+//If input = 0  then use default dynamics
+IF fJerk = 0.0 THEN
+	THIS^.fbStop.Jerk := THIS^.fDefaultJerk;
+ELSE
+	THIS^.fbStop.Jerk := fJerk;
+END_IF
+
+
+
+Stop := THIS^.fbFeedback;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Update" Id="{1245b00b-f027-4b03-8b99-b8b2c46c3df2}">
+      <Declaration><![CDATA[METHOD Update  : HRESULT
+VAR
+	//Gear
+	{attribute 'hide'}
+	fbGearMasterAxisRef  	: REFERENCE TO TC2_MC2.AXIS_REF; //Interface call in the Update methode to get this Referenz. Online-Change safe	
+	
+	//Multigear
+	{attribute 'hide'}
+	fbMultiGearMasterAxisRef1	: REFERENCE TO TC2_MC2.AXIS_REF; //Interface call in the Update methode to get this Referenz. Online-Change safe	
+	{attribute 'hide'}
+	fbMultiGearMasterAxisRef2	: REFERENCE TO TC2_MC2.AXIS_REF; //Interface call in the Update methode to get this Referenz. Online-Change safe	
+	{attribute 'hide'}
+	fbMultiGearMasterAxisRef3	: REFERENCE TO TC2_MC2.AXIS_REF; //Interface call in the Update methode to get this Referenz. Online-Change safe	
+	{attribute 'hide'}
+	fbMultiGearMasterAxisRef4	: REFERENCE TO TC2_MC2.AXIS_REF; //Interface call in the Update methode to get this Referenz. Online-Change safe	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ********************** Do initialisation first ***********************************************
+IF NOT THIS^.bInitDone THEN
+	Update := THIS^.Initialize();
+	RETURN;
+END_IF
+
+// ********************** Refresh Axis Information ***********************************************
+THIS^.Prepare();//Prepare time-critical information, if not already done
+
+
+// ********************** Set feedback depending on active command *******************************
+IF THIS^.eActiveCommand <> E_NcAxisCommands.None THEN
+	fbFeedback.ActiveCommand 	:= TO_STRING(THIS^.eActiveCommand);	
+END_IF
+
+
+CASE THIS^.eActiveCommand OF
+	E_NcAxisCommands.None: 
+		//Display if a NC Error is active during no command is active
+		IF THIS^.Axis.Status.Error AND NOT fbFeedback.Error THEN 
+			fbFeedback.ErrorId 			:= THIS^.Axis.Status.ErrorID;
+		END_IF
+		
+	E_NcAxisCommands.Reset:
+		fbFeedback.Busy 		:= fbReset.Busy;
+		fbFeedback.Done 		:= fbReset.Done;
+		fbFeedback.ErrorId 		:= fbReset.ErrorID;
+
+	E_NcAxisCommands.PowerOn:
+		fbFeedback.Busy 		:= fbPower.Busy;
+		fbFeedback.Done 		:= fbPower.Status;
+		fbFeedback.ErrorId 		:= fbPower.ErrorID;
+
+	E_NcAxisCommands.PowerOff:
+		fbFeedback.Busy 		:= fbPower.Busy;
+		fbFeedback.Done 		:= THIS^.Axis.Status.Disabled;
+		fbFeedback.ErrorId 		:= fbPower.ErrorID;
+		
+	E_NcAxisCommands.SetPosition:
+		fbFeedback.Busy 		:= fbSetPosition.Busy;
+		fbFeedback.Done 		:= fbSetPosition.Done;
+		fbFeedback.ErrorId 		:= fbSetPosition.ErrorID;
+		
+	E_NcAxisCommands.Stop: 
+		fbFeedback.Busy 		:= fbStop.Busy;
+		fbFeedback.Done 		:= (fbStop.Done OR NOT fbStop.Execute) AND NOT fbStop.Busy;
+		fbFeedback.ErrorId 		:= fbStop.ErrorID;
+		
+		//FB_Stop: The Busy output becomes TRUE when the command is started with Execute and remains TRUE as long as the command is processed. If Busy becomes FALSE again, the function block is ready for a new job.
+		//Attention: Busy remains TRUE as long as the axis is locked. The axis is only unlocked and Busy becomes FALSE when Execute is set to FALSE.
+		IF fbStop.Done THEN
+			fbStop.Execute := FALSE;
+		END_IF
+		
+	E_NcAxisCommands.MoveVelocity:
+		fbFeedback.Busy 		:= fbMoveVelocity[nActiveMoveVel].Busy;
+		fbFeedback.Done 		:= fbMoveVelocity[nActiveMoveVel].InVelocity;
+		fbFeedback.ErrorId 		:= fbMoveVelocity[nActiveMoveVel].ErrorID;
+
+	E_NcAxisCommands.MoveRelative:
+		fbFeedback.Busy 		:= fbMoveRelative[nActiveMoveRel].Busy;
+		fbFeedback.Done 		:= fbMoveRelative[nActiveMoveRel].Done;
+		fbFeedback.ErrorId 		:= fbMoveRelative[nActiveMoveRel].ErrorID;
+	
+	E_NcAxisCommands.MoveAbsolute:
+		fbFeedback.Busy 		:= fbMoveAbsolute[nActiveMoveAbs].Busy;
+		fbFeedback.Done 		:= fbMoveAbsolute[nActiveMoveAbs].Done;
+		fbFeedback.ErrorId 		:= fbMoveAbsolute[nActiveMoveAbs].ErrorID;
+			
+	E_NcAxisCommands.GearIn:	
+		fbFeedback.Busy 		:= fbGearIn.Busy;
+		fbFeedback.Done 		:= fbGearIn.InGear;
+		fbFeedback.ErrorId 		:= fbGearIn.ErrorID;
+		
+	E_NcAxisCommands.GearOut:
+		fbFeedback.Busy 		:= fbGearOut.Busy;
+		fbFeedback.Done 		:= fbGearOut.Done;
+		fbFeedback.ErrorId 		:= fbGearOut.ErrorID;
+			
+	E_NcAxisCommands.MultiGearIn:
+		//Wait for the GearOut to finish before GearIn
+		THIS^.fbGearInMultiMaster.Enable := NOT THIS^.Axis.Status.Coupled;
+		fbFeedback.Busy 		:= fbGearInMultiMaster.Busy;
+		fbFeedback.Done 		:= fbGearInMultiMaster.InGear;
+		fbFeedback.ErrorId 		:= fbGearInMultiMaster.ErrorID;
+		
+	ELSE//External command in subclass
+		;
+END_CASE
+
+
+// **********************  Stop to execute commands on .done or .error ***************************
+IF THIS^.Done OR THIS^.Error THEN
+	eActiveCommand 				:= E_NcAxisCommands.None;
+END_IF
+
+
+// ******  Get master axis AXIS_REF for gear - Only call if interface to masteraxis is valide else dummy axis ******
+IF THIS^.ipGearMasterAxis <> 0 THEN
+	fbGearMasterAxisRef REF= THIS^.ipGearMasterAxis.getAxisRef;
+ELSE
+	fbGearMasterAxisRef REF= THIS^.fbDummyAxisRef;
+END_IF
+IF THIS^.ipMultiGearMasterAxis1 <> 0 THEN
+	fbMultiGearMasterAxisRef1 REF= THIS^.ipMultiGearMasterAxis1.getAxisRef;
+ELSE
+	fbMultiGearMasterAxisRef1 REF= THIS^.fbDummyAxisRef;
+END_IF
+IF THIS^.ipMultiGearMasterAxis2 <> 0 THEN
+	fbMultiGearMasterAxisRef2 REF= THIS^.ipMultiGearMasterAxis2.getAxisRef;
+ELSE
+	fbMultiGearMasterAxisRef2 REF= THIS^.fbDummyAxisRef;
+END_IF
+IF THIS^.ipMultiGearMasterAxis3 <> 0 THEN
+	fbMultiGearMasterAxisRef3 REF= THIS^.ipMultiGearMasterAxis3.getAxisRef;
+ELSE
+	fbMultiGearMasterAxisRef3 REF= THIS^.fbDummyAxisRef;
+END_IF
+IF THIS^.ipMultiGearMasterAxis4 <> 0 THEN
+	fbMultiGearMasterAxisRef4 REF= THIS^.ipMultiGearMasterAxis4.getAxisRef;
+ELSE
+	fbMultiGearMasterAxisRef4 REF= THIS^.fbDummyAxisRef;
+END_IF
+
+
+// **********************  Cyclic calls  *********************************************************
+fbPower(Axis := THIS^.Axis);
+fbStop(Axis := THIS^.Axis);
+fbReset(Axis := THIS^.Axis);
+fbGearOut(Slave := THIS^.Axis);
+fbSetPosition(Axis := THIS^.Axis);
+fbGearIn(Master := fbGearMasterAxisRef, Slave := THIS^.Axis);
+fbGearInMultiMaster(Master1:=fbMultiGearMasterAxisRef1, Master2:=fbMultiGearMasterAxisRef2, Master3:=fbMultiGearMasterAxisRef3, Master4:=fbMultiGearMasterAxisRef4, Slave:=THIS^.Axis);
+fbMoveRelative[0](Axis := THIS^.Axis); 
+fbMoveRelative[1](Axis := THIS^.Axis);
+fbMoveAbsolute[0](Axis := THIS^.Axis); 
+fbMoveAbsolute[1](Axis := THIS^.Axis);
+fbMoveVelocity[0](Axis := THIS^.Axis); 
+fbMoveVelocity[1](Axis := THIS^.Axis);
+
+// ********************** Reset all Execution flags **********************************************
+fbGearinMultiMaster.Enable := FALSE;
+fbStop.Execute := FALSE;
+fbReset.Execute := FALSE;
+fbGearOut.Execute := FALSE;
+fbSetPosition.Execute := FALSE;
+fbGearIn.Execute := FALSE;
+fbMoveRelative[0].Execute := FALSE;
+fbMoveRelative[1].Execute := FALSE;
+fbMoveAbsolute[0].Execute := FALSE;
+fbMoveAbsolute[1].Execute := FALSE;
+fbMoveVelocity[0].Execute := FALSE;
+fbMoveVelocity[1].Execute := FALSE;
+
+
+// This flag is processed in the PLC cycle when a buffered motion command is requested via method
+THIS^.bNewBufferCommadThisCycle := FALSE;
+
+// ****************Get the acive instance. Stay at the last active.********************************
+IF fbMoveVelocity[0].Active THEN
+	nActiveMoveVel := 0;
+ELSIF fbMoveVelocity[1].Active THEN
+	nActiveMoveVel := 1;
+END_IF
+
+IF fbMoveRelative[0].Active THEN
+	nActiveMoveRel := 0;
+ELSIF fbMoveRelative[1].Active THEN
+	nActiveMoveRel := 1;
+END_IF
+
+IF fbMoveAbsolute[0].Active THEN
+	nActiveMoveAbs := 0;
+ELSIF fbMoveAbsolute[1].Active THEN
+	nActiveMoveAbs := 1;
+END_IF
+
+//Return
+Update := THIS^.fbFeedback.HR;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_NcAxisCommands" Id="{22875d36-b418-47e0-8bc2-b54326eeb735}">
+    <Declaration><![CDATA[{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_NcAxisCommands :
+(
+	None:=0,
+	Reset,
+	PowerOn,
+	PowerOff,
+	SetPosition,
+	Stop,
+	MoveVelocity,
+	MoveRelative,
+	MoveAbsolute,
+	GearIn,
+	GearOut,
+	MultiGearIn,
+	
+	//Commands that are not handled within the basic module and must be implemented externally
+	TorqueControl:=100,
+	Halt,
+	Jog,
+	GearInDyn,
+	MoveModulo,
+	HaltPhasing,
+	PhasingAbsolute,
+	PhasingRelative,
+	MoveContinuousAbsolute,
+	MoveContinuousRelative,
+	MoveSuperImposed,
+	AbortSuperposition,
+	Homing,
+	MoveAbsoluteCA,
+	MoveRelativeCA,
+	HaltCA,
+	GearInPosCA,
+	
+	ExternalCommand00:=200,	
+	ExternalCommand01,
+	ExternalCommand02,
+	ExternalCommand03,
+	ExternalCommand04,
+	ExternalCommand05,
+	ExternalCommand06,
+	ExternalCommand07,
+	ExternalCommand08,
+	ExternalCommand09,
+	ExternalCommand10,	
+	ExternalCommand11,
+	ExternalCommand12,
+	ExternalCommand13,
+	ExternalCommand14,
+	ExternalCommand15,
+	ExternalCommand16,
+	ExternalCommand17,
+	ExternalCommand18,
+	ExternalCommand19
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

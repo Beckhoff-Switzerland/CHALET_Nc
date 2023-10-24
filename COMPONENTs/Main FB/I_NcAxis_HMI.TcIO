@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <Itf Name="I_NcAxis_HMI" Id="{97147327-7d79-065e-158d-39b7eb2c699e}">
+    <Declaration><![CDATA[INTERFACE I_NcAxis_HMI EXTENDS I_AxisStatus
+]]></Declaration>
+    <Folder Name="Status" Id="{f4ee4c38-8e1a-0f5b-2310-696577aed203}" />
+    <Property Name="Busy" Id="{d7ae9a5b-c622-43ef-8296-395b76322395}" FolderPath="Status\">
+      <Declaration><![CDATA[PROPERTY Busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{19e8b939-a07d-4c5b-a7db-6c0d093977d1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Coupled" Id="{951b5ff6-5142-4cfc-b5f6-60097a57fce4}" FolderPath="Status\">
+      <Declaration><![CDATA[PROPERTY Coupled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{02f201be-d91c-4ee4-9953-34ef4bd96129}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Done" Id="{703e6611-72f6-4182-99b6-a5c299715228}" FolderPath="Status\">
+      <Declaration><![CDATA[PROPERTY Done : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f2d6808f-a585-4d6d-b5c7-c919c04ec9a3}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Error" Id="{2fe99582-9c2d-4601-bb4f-1f2010ba90bc}" FolderPath="Status\">
+      <Declaration><![CDATA[PROPERTY Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c7a9ac54-7640-4b6e-ab89-a92ffc0cdace}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="LUID" Id="{b1891b5e-8825-4dae-893a-1b6108c406e4}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY LUID : STRING  //Locally unique identifier]]></Declaration>
+      <Get Name="Get" Id="{a5b9d4fd-0e70-4a5a-b4fd-bd04c01327ed}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Moving" Id="{be186a69-45ce-44b8-b955-199deb6bbd0b}" FolderPath="Status\">
+      <Declaration><![CDATA[PROPERTY Moving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{90b49046-a309-41f7-b2e6-4867f58ff462}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="NcAxisName" Id="{8db492db-8f60-4e27-bc9f-dd5bf7d4cb17}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY NcAxisName : String(31)]]></Declaration>
+      <Get Name="Get" Id="{6c9f98d1-bd5a-4e20-9e7d-b193e18ffa50}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

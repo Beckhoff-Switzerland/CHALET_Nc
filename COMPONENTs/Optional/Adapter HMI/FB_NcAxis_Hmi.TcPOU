@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_NcAxis_Hmi" Id="{152bbadf-7056-4a87-af5e-66aac237ddf3}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_NcAxis_Hmi
+VAR
+    {attribute 'hide'}
+    ipAxis : I_NcAxis_HMI;
+    {attribute 'hide'}	
+	bValidInterface : BOOL;
+
+    fPosition     	: LREAL;
+    fVelocity     	: LREAL;
+    fAcceleration 	: LREAL;
+	bMoving		  	: BOOL;
+    bCoupled      	: BOOL;
+	bError      	: BOOL;
+	bBusy      		: BOOL;
+	bDone      		: BOOL;
+	strLUID			: STRING;
+	strNcAxisName	: STRING(31);
+	strState       	: STRING(20);
+END_VAR
+
+VAR CONSTANT
+	{attribute 'hide'}
+	//List of string of axis states
+	A_STR_AXIS_STATE: ARRAY[0..8] OF STRING(20) := ['UNDEFINED',
+													'DISABLED',
+													'STANDSTILL',
+													'ERRORSTOP',
+													'STOPPING',
+													'HOMING',
+													'DISCRETEMOTION',
+													'CONTINOUSMOTION',
+													'SYNCHRONIZEDMOTION'];
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{8af91e6b-0cbf-4d77-9206-7c94cb815c8e}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	
+	ipAxis : I_NcAxis_HMI;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Do the following code only during start up and not during onlinechange
+IF bInitRetains THEN 
+	
+	THIS^.ipAxis := ipAxis;
+	
+	THIS^.bValidInterface := THIS^.ipAxis <> 0;
+
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Update" Id="{ed79f5de-de2b-4533-b22d-e358e8a5dda0}">
+      <Declaration><![CDATA[METHOD Update : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT THIS^.bValidInterface THEN
+	//Error, no valide interface
+	Update := E_FAIL;
+	RETURN;
+END_IF
+
+
+//Convert data from interface to local variables
+fPosition     	:=THIS^.ipAxis.SetPosition;
+fVelocity     	:=THIS^.ipAxis.SetVelocity;
+fAcceleration 	:=THIS^.ipAxis.SetAcceleration;
+bCoupled      	:=THIS^.ipAxis.Coupled;
+bMoving     	:=THIS^.ipAxis.Moving;
+bError      	:=THIS^.ipAxis.Error;
+bBusy      		:=THIS^.ipAxis.Busy;
+bDone      		:=THIS^.ipAxis.Done;
+strLUID			:=THIS^.ipAxis.LUID;
+strNcAxisName	:=THIS^.ipAxis.NcAxisName;
+strState		:=THIS^.A_STR_AXIS_STATE[THIS^.ipAxis.MotionState];
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

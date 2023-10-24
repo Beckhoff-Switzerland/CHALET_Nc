@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <Itf Name="I_AxisStatus" Id="{0d8e4d9f-bbe7-4022-962a-03340822146e}">
+    <Declaration><![CDATA[INTERFACE I_AxisStatus
+]]></Declaration>
+    <Folder Name="Status" Id="{2babc351-48ef-4b6f-81fe-eccd620d0950}">
+      <Folder Name="Dynamics" Id="{fc1d2402-8ae3-4cff-8b21-d088c81ee903}" />
+    </Folder>
+    <Property Name="LagDistance" Id="{fb0f5634-2c13-0906-1c82-42a6c4a0b8eb}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY LagDistance : LREAL]]></Declaration>
+      <Get Name="Get" Id="{18961520-ff77-0b09-332d-a95e452e6ec1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="MotionState" Id="{9a1b6917-8a35-0e0e-362e-15d08ef85f30}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY MotionState : Tc2_MC2.MC_AxisStates]]></Declaration>
+      <Get Name="Get" Id="{ceb5f809-7554-0f46-0f5f-29f265091ce7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="SetAcceleration" Id="{09f7b76d-4e36-431a-aadf-8b2f5da62ac2}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetAcceleration : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{42e0a9c5-12d2-4bba-b047-7c8e5b06e4e0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="SetPosition" Id="{a8587236-2163-4a89-8b5f-70e6cfbe4848}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetPosition : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{75e7eacd-60f1-4c7b-a4d3-26f94f884911}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="SetPosModulo" Id="{075db387-109d-4b7a-8922-b7576e8a327e}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetPosModulo : LREAL]]></Declaration>
+      <Get Name="Get" Id="{433b8775-c130-4258-bb50-f049217f60f0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="SetVelocity" Id="{36c12c75-2ef4-455a-a496-f4f4b70d9ecf}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+PROPERTY SetVelocity : LREAL
+]]></Declaration>
+      <Get Name="Get" Id="{9564d8da-0709-4fd7-bc5b-a47b2a61ecc8}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+  </Itf>
+</TcPlcObject>

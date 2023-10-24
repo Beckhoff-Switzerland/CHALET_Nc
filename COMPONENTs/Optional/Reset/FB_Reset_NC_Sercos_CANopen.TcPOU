@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_Reset_NC_Sercos_CANopen" Id="{4a99229d-a453-4866-9435-4e816a1dc9d9}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide_all_locals'}
+FUNCTION_BLOCK FB_Reset_NC_Sercos_CANopen
+VAR_INPUT
+    Execute : BOOL;
+END_VAR
+VAR_OUTPUT
+    Done    : BOOL;
+    Busy    : BOOL;
+    Error   : BOOL;
+    ErrorID : UDINT;
+END_VAR
+VAR_IN_OUT
+    Axis 	: AXIS_REF;
+END_VAR
+VAR 
+	nSeq 				: UDINT :=0;
+	nErrorID 			: UDINT;
+	fbSoEReset			: TC2_MC2_DRIVE.FB_SoEReset;
+	fbAxisReset			: Tc2_MC2.MC_Reset;
+	fbTriggerExecute	: R_TRIG;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbTriggerExecute(CLK:= THIS^.Execute);
+IF fbTriggerExecute.Q THEN
+	THIS^.Done			:=FALSE;
+	THIS^.Busy			:=TRUE;
+	THIS^.Error			:=FALSE;
+	nSeq 				:= 1;
+END_IF
+
+IF NOT (THIS^.Busy OR THIS^.Execute) THEN
+	fbSoEReset.Execute	:=FALSE;
+	fbAxisReset.Execute	:=FALSE;
+	THIS^.Done			:=FALSE;
+	THIS^.Busy			:=FALSE;
+	THIS^.Error			:=FALSE;
+	THIS^.ErrorID 		:= 0;
+	nSeq 				:= 0;
+END_IF
+
+CASE nSeq OF
+	0: // ************************ wait for commands  ***********************************
+		
+	1:	// **********************  Reset Safety  *****************************************
+
+		(* ToDo Reset Safety *)	
+		(* ToDo Reset Safety *)	
+		(* ToDo Reset Safety *)	
+		(* ToDo Reset Safety *)	
+		(* ToDo Reset Safety *)	
+		(* ToDo Reset Safety *)	
+		
+		nSeq := 10;	 
+		
+	10:	// **********************  Check if Sercos reset is recuired *****************************************
+		//If Sercos Axis and Sercos reset recuired, do a sercos reset first. Else do normal reset
+		IF (THIS^.Axis.DriveAddress.NcDriveType = NcDriveType_Sercos) AND (THIS^.Axis.Status.ErrorID >=17408)AND (THIS^.Axis.Status.ErrorID <=18005) THEN
+			fbSoEReset.Execute	:=TRUE;
+			nSeq := 20;	 			
+		ELSE
+			fbAxisReset.Execute := TRUE;
+			nSeq := 30;
+		END_IF	
+
+	20:	// *********************  Wait for Sercos Reset done ************************************************************	
+		IF fbSoEReset.Error THEN
+			IF (fbSoEReset.AdsErrId <> 0) THEN
+				nErrorID := fbSoEReset.AdsErrId;
+			ELSE
+				nErrorID := fbSoEReset.SercosErrId;
+			END_IF
+			fbAxisReset.Execute := TRUE;
+			//goto error seq
+			nSeq := 10000+nSeq; 
+		ELSIF NOT fbSoEReset.Busy THEN
+			fbSoEReset.Execute	:=FALSE;
+			fbAxisReset.Execute := TRUE;
+			nSeq := 30;
+		END_IF				
+			
+	30:	// **********************  Wait for NC reset done *****************************************
+		IF fbAxisReset.Error THEN
+			nErrorID := fbAxisReset.ErrorID;
+			fbAxisReset.Execute:=FALSE;
+			//goto error seq
+			nSeq := 10000+nSeq; 
+		ELSIF fbAxisReset.Done THEN
+			fbAxisReset.Execute:=FALSE;
+			nSeq := 100;
+		END_IF	
+		
+	100: // ********************** reset done  *****************************************************
+		THIS^.Done		:=TRUE;
+		THIS^.Busy		:=FALSE;
+		THIS^.Error		:=FALSE;
+		
+	10000..20000: // ************  display error ************************************************************
+		THIS^.Done		:=FALSE;
+		THIS^.Busy		:=FALSE;
+		THIS^.Error		:=TRUE;
+		THIS^.ErrorID	:=nErrorID;		
+END_CASE
+
+// **********************  Cyclic calls  ************************************************************
+fbAxisReset(Axis := THIS^.Axis);		
+fbSoEReset(Axis:= THIS^.Axis);
+
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
