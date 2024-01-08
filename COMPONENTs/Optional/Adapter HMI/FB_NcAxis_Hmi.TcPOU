@@ -16,23 +16,23 @@ VAR
 	bError      	: BOOL;
 	bBusy      		: BOOL;
 	bDone      		: BOOL;
-	strLUID			: STRING;
-	strNcAxisName	: STRING(31);
-	strState       	: STRING(20);
+	sLUID			: STRING;		//Locally unique identifier
+	sNcAxisName		: STRING(31);
+	sState       	: STRING(20);
 END_VAR
 
 VAR CONSTANT
 	{attribute 'hide'}
 	//List of string of axis states
-	A_STR_AXIS_STATE: ARRAY[0..8] OF STRING(20) := ['UNDEFINED',
-													'DISABLED',
-													'STANDSTILL',
-													'ERRORSTOP',
-													'STOPPING',
-													'HOMING',
-													'DISCRETEMOTION',
-													'CONTINOUSMOTION',
-													'SYNCHRONIZEDMOTION'];
+	AXIS_STATES: ARRAY[0..8] OF STRING(20) := [	'UNDEFINED',
+												'DISABLED',
+												'STANDSTILL',
+												'ERRORSTOP',
+												'STOPPING',
+												'HOMING',
+												'DISCRETEMOTION',
+												'CONTINOUSMOTION',
+												'SYNCHRONIZEDMOTION'];
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[]]></ST>
@@ -45,17 +45,18 @@ VAR_INPUT
 	
 	ipAxis : I_NcAxis_HMI;
 END_VAR
-]]></Declaration>
+VAR_INST
+	{attribute 'hide'}
+	bFBInitCalledOnce : BOOL; //Do the following code once during start up and not during onlinechange
+END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[//Do the following code only during start up and not during onlinechange
-IF bInitRetains THEN 
-	
+        <ST><![CDATA[//Do the following code once during start up and not during onlinechange
+IF NOT bFBInitCalledOnce THEN 
 	THIS^.ipAxis := ipAxis;
-	
 	THIS^.bValidInterface := THIS^.ipAxis <> 0;
-
 END_IF
 
+bFBInitCalledOnce := TRUE;
 ]]></ST>
       </Implementation>
     </Method>
@@ -81,9 +82,9 @@ bMoving     	:=THIS^.ipAxis.Moving;
 bError      	:=THIS^.ipAxis.Error;
 bBusy      		:=THIS^.ipAxis.Busy;
 bDone      		:=THIS^.ipAxis.Done;
-strLUID			:=THIS^.ipAxis.LUID;
-strNcAxisName	:=THIS^.ipAxis.NcAxisName;
-strState		:=THIS^.A_STR_AXIS_STATE[THIS^.ipAxis.MotionState];
+sLUID			:=THIS^.ipAxis.LUID;
+sNcAxisName		:=THIS^.ipAxis.NcAxisName;
+sState			:=THIS^.AXIS_STATES[THIS^.ipAxis.MotionState];
 
 
 ]]></ST>

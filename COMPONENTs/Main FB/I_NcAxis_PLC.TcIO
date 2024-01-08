@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
   <Itf Name="I_NcAxis_PLC" Id="{98eaa978-5fd0-01b2-16cd-d331b5e66798}">
-    <Declaration><![CDATA[INTERFACE I_NcAxis_PLC EXTENDS I_AxisStatus]]></Declaration>
+    <Declaration><![CDATA[INTERFACE I_NcAxis_PLC EXTENDS I_AxisStatus, I_Adapter_AXIS_REF]]></Declaration>
     <Folder Name="Command" Id="{3e4d059e-0469-09be-07b7-f53ea077ca5e}" />
     <Folder Name="Status" Id="{5d709198-2bfd-02c6-017b-86d9c50b4f5c}">
       <Folder Name="Dynamics" Id="{8da71876-a8ab-4652-98b4-fcb83df196f7}" />
@@ -154,6 +154,10 @@ END_VAR]]></Declaration>
     </Method>
     <Method Name="GearOut" Id="{f0242e6a-c4d1-4406-8dc2-be954291235b}" FolderPath="Command\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+(*WARNING
+No standstill of the axis due to decoupling
+When a slave axis is uncoupled during the movement, it is not stopped automatically but reaches a constant velocity at which it continues to travel infinitely.
+You can stop the axis with the function blocks MC_Halt or MC_Stop.*)
 METHOD GearOut  : I_CH_Feedback
 ]]></Declaration>
     </Method>

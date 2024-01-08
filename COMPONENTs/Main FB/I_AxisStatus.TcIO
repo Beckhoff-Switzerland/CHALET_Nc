@@ -6,11 +6,25 @@
     <Folder Name="Status" Id="{2babc351-48ef-4b6f-81fe-eccd620d0950}">
       <Folder Name="Dynamics" Id="{fc1d2402-8ae3-4cff-8b21-d088c81ee903}" />
     </Folder>
+    <Property Name="Initialized" Id="{77a37612-c984-4df1-84fc-6fbf2c647f50}">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Initialized : BOOL]]></Declaration>
+      <Get Name="Get" Id="{40b61e3f-d37f-4994-9250-d2f8d4db2bb1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
     <Property Name="LagDistance" Id="{fb0f5634-2c13-0906-1c82-42a6c4a0b8eb}" FolderPath="Status\">
       <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
 {attribute 'monitoring':='call'}
 PROPERTY LagDistance : LREAL]]></Declaration>
       <Get Name="Get" Id="{18961520-ff77-0b09-332d-a95e452e6ec1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Mapped" Id="{5d597918-b21a-4ac9-9769-be7923f0c786}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Mapped : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6dd65be8-b5d9-4dc9-810a-691625bd80e5}">
         <Declaration><![CDATA[]]></Declaration>
       </Get>
     </Property>

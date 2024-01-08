@@ -316,17 +316,17 @@ VAR_INPUT
 	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
 	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
 END_VAR
-]]></Declaration>
+VAR_INST
+	{attribute 'hide'}
+	bFBInitCalledOnce : BOOL; //Do the following code once during start up and not during onlinechange
+END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[//Do the following code only during start up and not during onlinechange
-IF bInitRetains THEN 
-	
-
+        <ST><![CDATA[//Do the following code once during start up and not during onlinechange
+IF NOT bFBInitCalledOnce THEN 
 	THIS^.fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);	
-
-
 END_IF
 
+bFBInitCalledOnce := TRUE;
 ]]></ST>
       </Implementation>
     </Method>
@@ -456,27 +456,26 @@ GearIn := THIS^.fbFeedback;]]></ST>
     </Method>
     <Method Name="GearOut" Id="{c325e218-66a1-4c7e-b618-e3562cd69457}" FolderPath="Command\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
+(*WARNING
+No standstill of the axis due to decoupling
+When a slave axis is uncoupled during the movement, it is not stopped automatically but reaches a constant velocity at which it continues to travel infinitely.
+You can stop the axis with the function blocks MC_Halt or MC_Stop.*)
 METHOD GearOut  : I_CH_Feedback
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF NOT (THIS^.fbFeedback.HR = S_OK) THEN
-	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
-	//Error active/not ready
+        <ST><![CDATA[
 
-ELSE
-	THIS^.eActiveCommand 				:= E_NcAxisCommands.GearOut;
-	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
-	THIS^.fbFeedback.Busy 				:= TRUE;
+THIS^.eActiveCommand 				:= E_NcAxisCommands.GearOut;
+THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+THIS^.fbFeedback.Busy 				:= TRUE;
 
-	THIS^.fbGearOut.Execute				:= TRUE;
+THIS^.fbGearOut.Execute				:= TRUE;
 
-	THIS^.ipGearMasterAxis 				:= 0;
-	THIS^.ipMultiGearMasterAxis1 		:= 0;
-	THIS^.ipMultiGearMasterAxis2 		:= 0;
-	THIS^.ipMultiGearMasterAxis3 		:= 0;
-	THIS^.ipMultiGearMasterAxis4 		:= 0;
-	
-END_IF
+THIS^.ipGearMasterAxis 				:= 0;
+THIS^.ipMultiGearMasterAxis1 		:= 0;
+THIS^.ipMultiGearMasterAxis2 		:= 0;
+THIS^.ipMultiGearMasterAxis3 		:= 0;
+THIS^.ipMultiGearMasterAxis4 		:= 0;
 
 
 
@@ -493,23 +492,18 @@ END_VAR
       <Implementation>
         <ST><![CDATA[IF NOT THIS^.bInitDone THEN
 	Initialize := S_PENDING;
-	fbFeedback.ActiveCommand := 'Init';
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(E_NcAxisCommands.Initialize);
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.Initialize;
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;		
+	THIS^.fbFeedback.Busy 				:= TRUE;
 	
 	// Check if link to NC is mapped
-	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND_THEN F_GetMappingStatus(ADR(THIS^.Axis.NcToPlc), SIZEOF(THIS^.Axis.NcToPlc)) <> EPlcMappingStatus.MS_Mapped THEN
+	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND NOT THIS^.Mapped THEN
 		//ERROR NcToPlc
 		Initialize := E_FAIL;
 		RETURN;
 	END_IF
-	
-	
-	// Check if link to NC is mapped
-	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND_THEN F_GetMappingStatus(ADR(THIS^.Axis.PlcToNc), SIZEOF(THIS^.Axis.PlcToNc)) <> EPlcMappingStatus.MS_Mapped THEN
-		//ERROR PlcToNc
-		Initialize := E_FAIL;		
-		RETURN;
-	END_IF	
-	
+
 	
 	// Check and wait until NC Task is in a valid running state
 	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND THIS^.Axis.NcToPlc.AxisId = 0 THEN
@@ -550,6 +544,18 @@ ELSE
 END_IF]]></ST>
       </Implementation>
     </Method>
+    <Property Name="Initialized" Id="{a5bd683f-57b8-4bea-833d-83a7d9b372ef}">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Initialized : BOOL]]></Declaration>
+      <Get Name="Get" Id="{dc985635-1f10-4dd8-9d8f-890d71f86f2a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Initialized := THIS^.bInitDone;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
     <Property Name="LagDistance" Id="{3172a7dc-dce9-4d25-b7f0-07ba9370df67}" FolderPath="Status\">
       <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
 {attribute 'monitoring':='call'}
@@ -561,6 +567,24 @@ END_VAR
 ]]></Declaration>
         <Implementation>
           <ST><![CDATA[LagDistance := THIS^.Axis.NcToPlc.PosDiff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Mapped" Id="{4b078e23-6dd2-470d-85e0-b93c24556389}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Mapped : BOOL //Project is mapped to NC (NcToPlc and PlcToNc)
+]]></Declaration>
+      <Get Name="Get" Id="{6eb29c1f-cc4e-4824-ae76-4791de5204bb}">
+        <Declaration><![CDATA[VAR
+	bNcToPlcNotMapped 	: BOOL;
+	bPlcToNcNotMapped 	: BOOL;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bPlcToNcNotMapped := F_GetMappingStatus(ADR(THIS^.Axis.PlcToNc), SIZEOF(THIS^.Axis.PlcToNc)) <> EPlcMappingStatus.MS_Mapped;
+bNcToPlcNotMapped := F_GetMappingStatus(ADR(THIS^.Axis.NcToPlc), SIZEOF(THIS^.Axis.NcToPlc)) <> EPlcMappingStatus.MS_Mapped;
+
+Mapped := NOT bNcToPlcNotMapped AND NOT bPlcToNcNotMapped;]]></ST>
         </Implementation>
       </Get>
     </Property>
@@ -1384,6 +1408,11 @@ CASE THIS^.eActiveCommand OF
 		IF THIS^.Axis.Status.Error AND NOT fbFeedback.Error THEN 
 			fbFeedback.ErrorId 			:= THIS^.Axis.Status.ErrorID;
 		END_IF
+		
+	E_NcAxisCommands.Initialize:
+		fbFeedback.Busy 		:= NOT THIS^.bInitDone;
+		fbFeedback.Done 		:= THIS^.bInitDone;
+		fbFeedback.ErrorId 		:= 0;
 		
 	E_NcAxisCommands.Reset:
 		fbFeedback.Busy 		:= fbReset.Busy;

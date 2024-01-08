@@ -6,6 +6,7 @@
 TYPE E_NcAxisCommands :
 (
 	None:=0,
+	Initialize,
 	Reset,
 	PowerOn,
 	PowerOff,
@@ -36,7 +37,23 @@ TYPE E_NcAxisCommands :
 	MoveRelativeCA,
 	HaltCA,
 	GearInPosCA,
+	StartExternalSetpoint,
+	StopExternalSetpoint,
 	
+	//xPlanar
+	Enable,
+	Disable,
+	AddToGroupe,
+	RemoveFromGroupe,
+	MoveA,
+	MoveB,
+	MoveC,
+	MoveXY,
+	MoveZ,
+	JoinTrack,
+	MoveOnTrack,
+	
+	//Reserve
 	ExternalCommand00:=200,	
 	ExternalCommand01,
 	ExternalCommand02,
@@ -57,7 +74,9 @@ TYPE E_NcAxisCommands :
 	ExternalCommand17,
 	ExternalCommand18,
 	ExternalCommand19
-);
+
+//default is none	
+) := None;
 END_TYPE
 ]]></Declaration>
   </DUT>
