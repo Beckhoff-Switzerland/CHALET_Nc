@@ -434,6 +434,7 @@ CASE nSeqSoE OF
 		fbSoeRead.Element 			:= 16#40;//the value of the parameter
 		nSeqSoE := 341;
 		
+		
 	341:// **********************   read the offset memory location  *****************************************	
 		IF fbSoeRead.Error THEN
 			nSeqSoE := 941;

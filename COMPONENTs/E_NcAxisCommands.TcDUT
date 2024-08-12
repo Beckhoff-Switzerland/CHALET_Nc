@@ -45,6 +45,7 @@ TYPE E_NcAxisCommands :
 	Disable,
 	AddToGroupe,
 	RemoveFromGroupe,
+	Configure,
 	MoveA,
 	MoveB,
 	MoveC,
@@ -52,6 +53,7 @@ TYPE E_NcAxisCommands :
 	MoveZ,
 	JoinTrack,
 	MoveOnTrack,
+	Clear,
 	
 	//Reserve
 	ExternalCommand00:=200,	

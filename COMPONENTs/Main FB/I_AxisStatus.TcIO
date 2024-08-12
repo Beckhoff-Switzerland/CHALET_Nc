@@ -6,6 +6,22 @@
     <Folder Name="Status" Id="{2babc351-48ef-4b6f-81fe-eccd620d0950}">
       <Folder Name="Dynamics" Id="{fc1d2402-8ae3-4cff-8b21-d088c81ee903}" />
     </Folder>
+    <Property Name="Enabled" Id="{752725f5-969d-41e1-afbb-08a140c483d4}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//operational and position control active
+PROPERTY Enabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{5c98da30-2464-4f4a-bbcb-8d4bb7de991e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Feedback" Id="{7a89218f-24b9-4a7c-a1f6-ee9a7d16c8ee}">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Feedback : I_CH_Feedback]]></Declaration>
+      <Get Name="Get" Id="{a05df69b-72a0-4f2c-a42f-c3610fd710a3}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
     <Property Name="Initialized" Id="{77a37612-c984-4df1-84fc-6fbf2c647f50}">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
 PROPERTY Initialized : BOOL]]></Declaration>

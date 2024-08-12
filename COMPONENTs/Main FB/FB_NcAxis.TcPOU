@@ -4,7 +4,7 @@
     <Declaration><![CDATA[// The warning " Interface of overridden methode xxx of base I_xxx doesn't match declaration" can be disabled here. 
 {warning disable C0094 }
 {attribute 'no_explicit_call' := '[FB_NcAxis] Do not call the body - Stick to OOP'}
-FUNCTION_BLOCK FB_NcAxis EXTENDS FB_Adapter_AXIS_REF IMPLEMENTS I_NcAxis_PLC, I_NcAxis_HMI
+FUNCTION_BLOCK FB_NcAxis EXTENDS FB_Adapter_AXIS_REF IMPLEMENTS I_NcAxis_PLC, I_NcAxis_HMI, I_AdsAddr
 VAR
 	{attribute 'hide'}
 	bInitDone : BOOL;
@@ -42,7 +42,7 @@ VAR
 	fbDummyAxisRef		: TC2_MC2.AXIS_REF; // AxisRef whitout linked Nc
 	
 	{attribute 'hide'}               	
-	fbFeedback 			: CHALET_BaseComponents.FB_CH_Feedback;
+	fbFeedback 			: CHALET_BaseComponents.FB_CH_Feedback(ipSourceInfo := fbSourceInfo);	
 	
  	{attribute 'hide'}                   	
 	eActiveCommand 		: E_NcAxisCommands := E_NcAxisCommands.None;
@@ -83,6 +83,7 @@ END_VAR
     <Implementation>
       <ST><![CDATA[]]></ST>
     </Implementation>
+    <Folder Name="Admin" Id="{aa3fdc46-f083-4e3b-94f3-91f351698dbb}" />
     <Folder Name="Command" Id="{db3653fb-675b-439e-94a7-6792f0175b5f}" />
     <Folder Name="Status" Id="{3df1230d-b774-4094-948e-0f994f8d1a6b}">
       <Folder Name="Dynamics" Id="{cd0de26d-0512-4c2b-8e7c-6e81a94f35da}" />
@@ -163,19 +164,6 @@ nCtsBusyCommands := nCtsBusyCommands + BOOL_TO_UINT(fbMoveVelocity[1].Busy);
 BufferEmpty := NOT bNewBufferCommadThisCycle AND NOT Axis.Status.CmdBuffered AND nCtsBusyCommands < 2; 
 
 ]]></ST>
-        </Implementation>
-      </Get>
-    </Property>
-    <Property Name="Busy" Id="{e8f99efc-ff15-4755-848a-5604a6b9cc6c}" FolderPath="Status\">
-      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
-{attribute 'monitoring':='call'}
-PROPERTY Busy : BOOL]]></Declaration>
-      <Get Name="Get" Id="{c17c601e-d4c3-425e-90bb-82a63b791f3d}">
-        <Declaration><![CDATA[VAR
-END_VAR
-]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[Busy := THIS^.fbFeedback.Busy;]]></ST>
         </Implementation>
       </Get>
     </Property>
@@ -284,29 +272,21 @@ END_VAR
         </Implementation>
       </Set>
     </Property>
-    <Property Name="Done" Id="{40217848-2b2a-4bc4-a4ea-a3653cee9f9b}" FolderPath="Status\">
-      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
-{attribute 'monitoring':='call'}
-PROPERTY Done : BOOL]]></Declaration>
-      <Get Name="Get" Id="{8bc2d795-7b3e-455d-b75c-3273dd910ce2}">
+    <Property Name="Enabled" Id="{6ab8de23-858a-4483-bdcb-87db9b58c0d8}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//operational and position control active
+PROPERTY Enabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{97f67cbc-1bf0-4ee4-a271-3b0318a3deab}">
         <Declaration><![CDATA[VAR
 END_VAR
 ]]></Declaration>
         <Implementation>
-          <ST><![CDATA[Done := THIS^.fbFeedback.Done;]]></ST>
-        </Implementation>
-      </Get>
-    </Property>
-    <Property Name="Error" Id="{5dac4650-4100-4ac8-a1fa-4b3b88373326}" FolderPath="Status\">
-      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
-{attribute 'monitoring':='call'}
-PROPERTY Error : BOOL]]></Declaration>
-      <Get Name="Get" Id="{ceec6dfe-7aaf-4631-8a12-7648af7fee6b}">
-        <Declaration><![CDATA[VAR
-END_VAR
-]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[Error := THIS^.fbFeedback.Error;]]></ST>
+          <ST><![CDATA[THIS^.Prepare();//Prepare time-critical information, if not already done
+
+(* StateDWord bit 20 - operational and position control active *)
+Enabled :=  THIS^.Axis.Status.ControlLoopClosed;
+]]></ST>
         </Implementation>
       </Get>
     </Property>
@@ -487,8 +467,14 @@ GearOut := THIS^.fbFeedback;]]></ST>
 VAR_INST
 	fbReadDriveAddress	: MC_ReadDriveAddress;
 	fbReadParameterSet 	: MC_ReadParameterSet;
+	
+	stVarInfo : __SYSTEM.VAR_INFO;
 END_VAR
-]]></Declaration>
+VAR_INST
+	//This error cannot be reset. Requires a reset cold
+	{attribute 'hide'}	
+	fbInitError : FB_TcAlarm;
+END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[IF NOT THIS^.bInitDone THEN
 	Initialize := S_PENDING;
@@ -499,7 +485,13 @@ END_VAR
 	
 	// Check if link to NC is mapped
 	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND NOT THIS^.Mapped THEN
-		//ERROR NcToPlc
+		IF NOT fbInitError.bRaised THEN 
+			//This error cannot be reset. Requires a reset cold
+			fbInitError.CreateEx(stEventEntry:=TC_EVENTS.CHALET_NC_Events.VariableLinkMissing, ipSourceInfo := THIS^.fbSourceInfo, bWithConfirmation := FALSE);
+			stVarInfo := __VARINFO(Axis);
+			fbInitError.ipArguments.AddString(stVarInfo.Symbol);
+			fbInitError.Raise(0);
+		END_IF
 		Initialize := E_FAIL;
 		RETURN;
 	END_IF
@@ -541,7 +533,9 @@ END_VAR
 		
 ELSE
 	Initialize := S_OK;	
-END_IF]]></ST>
+END_IF
+
+THIS^.fbFeedback.HR := Initialize;]]></ST>
       </Implementation>
     </Method>
     <Property Name="Initialized" Id="{a5bd683f-57b8-4bea-833d-83a7d9b372ef}">
@@ -570,7 +564,7 @@ END_VAR
         </Implementation>
       </Get>
     </Property>
-    <Property Name="Mapped" Id="{4b078e23-6dd2-470d-85e0-b93c24556389}" FolderPath="Status\">
+    <Property Name="Mapped" Id="{4b078e23-6dd2-470d-85e0-b93c24556389}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
 PROPERTY Mapped : BOOL //Project is mapped to NC (NcToPlc and PlcToNc)
 ]]></Declaration>
@@ -640,7 +634,7 @@ VAR
 	nInactiveInstance : UINT;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF THIS^.Error THEN
+        <ST><![CDATA[IF THIS^.fbFeedback.Error THEN
 	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
 	//Error active/not ready
 
@@ -752,7 +746,7 @@ VAR
 	nInactiveInstance : UINT;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF THIS^.Error THEN
+        <ST><![CDATA[IF THIS^.fbFeedback.Error THEN
 	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
 	//Error active/not ready
 
@@ -872,7 +866,7 @@ VAR
 	nInactiveInstance : UINT;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF THIS^.Error THEN
+        <ST><![CDATA[IF THIS^.fbFeedback.Error THEN
 	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
 	//Error active/not ready
 
@@ -1075,7 +1069,7 @@ END_IF
 MultiGearIn := THIS^.fbFeedback;]]></ST>
       </Implementation>
     </Method>
-    <Property Name="NcAxisName" Id="{b43921d1-43bf-4616-b554-93cb344ed854}" FolderPath="Status\">
+    <Property Name="NcAxisName" Id="{b43921d1-43bf-4616-b554-93cb344ed854}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
 {attribute 'monitoring':='call'}
 PROPERTY NcAxisName : String(31)]]></Declaration>
@@ -1088,7 +1082,7 @@ END_VAR
         </Implementation>
       </Get>
     </Property>
-    <Property Name="NcAxisType" Id="{41b40ea4-38a3-4a09-98dd-a04b3f6c3148}" FolderPath="Status\">
+    <Property Name="NcAxisType" Id="{41b40ea4-38a3-4a09-98dd-a04b3f6c3148}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
 {attribute 'monitoring':='call'}
 PROPERTY NcAxisType : Tc2_MC2.E_NcAxisType]]></Declaration>
@@ -1101,7 +1095,7 @@ END_VAR
         </Implementation>
       </Get>
     </Property>
-    <Property Name="NcDriveType" Id="{2c2d7f2d-90da-4aef-8657-0ccda0d9d6da}" FolderPath="Status\">
+    <Property Name="NcDriveType" Id="{2c2d7f2d-90da-4aef-8657-0ccda0d9d6da}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
 {attribute 'monitoring':='call'}
 PROPERTY NcDriveType : Tc2_MC2.E_NcDriveType]]></Declaration>
@@ -1115,7 +1109,19 @@ END_VAR
         </Implementation>
       </Get>
     </Property>
-    <Property Name="OID" Id="{879b1cd5-66b0-4ccc-8c0d-58ed0c327ea3}" FolderPath="Status\">
+    <Property Name="NetId" Id="{aae4ed24-485b-4b25-9666-8c988e15c0cc}" FolderPath="Admin\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY NetId : T_AmsNetID ]]></Declaration>
+      <Get Name="Get" Id="{7e32806a-fb04-429d-ab3c-cb4d4f2efecc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[NetId := THIS^.Axis.DriveAddress.NetID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="OID" Id="{879b1cd5-66b0-4ccc-8c0d-58ed0c327ea3}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
 PROPERTY OID : OTCID]]></Declaration>
       <Get Name="Get" Id="{daad09c2-d294-4d30-a5c0-fcb1a51999e2}">
@@ -1124,6 +1130,19 @@ END_VAR
 ]]></Declaration>
         <Implementation>
           <ST><![CDATA[OID := THIS^.Axis.DriveAddress.TcAxisObjectId;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Port" Id="{8905d5cd-70ce-45d7-b32e-92cc61e5090c}" FolderPath="Admin\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Port : WORD]]></Declaration>
+      <Get Name="Get" Id="{847108af-d6c4-4d80-a803-97b9f255771b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Port := THIS^.Axis.DriveAddress.SlaveAddress;
+]]></ST>
         </Implementation>
       </Get>
     </Property>
@@ -1187,10 +1206,19 @@ METHOD PROTECTED Prepare : HRESULT
 VAR_INST
 	{attribute 'hide'}	
 	nLastUpdatedCycleCount : UDINT;
+
 	{attribute 'hide'}	
-	fbTriggerError		: R_TRIG;
+	nOldErrorCode 		: UDINT;
 	{attribute 'hide'}	
-	fbMessageNcError			: FB_TcMessage;
+	fbAlarmNc			: FB_TcAlarm;
+	{attribute 'hide'}
+	fbAlarmInvalideIoData	: FB_TcAlarm;	
+	{attribute 'hide'}
+	fbAlarmDriveDeviceError	: FB_TcAlarm;	
+	{attribute 'hide'}
+	fbAlarmSoftLimitMinExceeded	: FB_TcAlarm;	
+	{attribute 'hide'}
+	fbAlarmSoftLimitMaxExceeded	: FB_TcAlarm;
 END_VAR
 
 ]]></Declaration>
@@ -1202,14 +1230,119 @@ IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex
 	// Refresh Axis Information 
 	Axis.ReadStatus();
 	
-	//Write NC-Error in TC3 Eventlogger
-	fbTriggerError(CLK:= THIS^.Axis.NcToPlc.StateDWord.31 );
-	IF fbTriggerError.Q THEN
-		fbMessageNcError.Create(TC_EVENT_CLASSES.Tc3_NcErrorCodes, THIS^.Axis.NcToPlc.ErrorCode, TcEventSeverity.Error, THIS^.fbSourceInfo);
-		fbMessageNcError.Send(0);
-		fbMessageNcError.Release();
+	
+	//Write NC-Error(Axis.NcToPlc.ErrorCode) in TC3 Eventlogger
+	IF (THIS^.Axis.NcToPlc.ErrorCode = 0 AND fbAlarmNc.bRaised) THEN
+		//No error - Reset	
+		fbAlarmNc.Clear(0,0);
+		
+	ELSIF (THIS^.Axis.NcToPlc.ErrorCode = 0) THEN
+		; //Nothing
+		
+	ELSIF (nOldErrorCode <> THIS^.Axis.NcToPlc.ErrorCode) THEN
+		//New Error - Reset, Create and Raise
+		fbAlarmNc.Clear(0,0);
+		fbAlarmNc.Create(	eventClass		:= TC_EVENT_CLASSES.Tc3_NcErrorCodes, 
+							nEventId		:= THIS^.Axis.NcToPlc.ErrorCode, 
+							eSeverity		:= TcEventSeverity.Error, 
+							ipSourceInfo 	:= THIS^.fbSourceInfo, 
+							bWithConfirmation := FALSE);
+		fbAlarmNc.ipArguments.Clear();
+		fbAlarmNc.Raise(0);
+	ELSE
+		//Alarm is already active
+		;
 	END_IF
-
+	nOldErrorCode := THIS^.Axis.NcToPlc.ErrorCode;
+	
+	
+	//Write InvalideIoData(Axis.NcToPlc.StateDWord.30) in TC3 Eventlogger
+	IF (NOT THIS^.Axis.NcToPlc.StateDWord.30 AND fbAlarmInvalideIoData.bRaised) THEN
+		//No error - Reset	
+		fbAlarmInvalideIoData.Clear(0,0);
+		
+	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.30) THEN
+		; //Nothing
+			
+	ELSIF (THIS^.Axis.NcToPlc.StateDWord.30 AND NOT fbAlarmInvalideIoData.bRaised) THEN
+		//New Error - Create and Raise
+		fbAlarmInvalideIoData.CreateEx(	
+					stEventEntry:= TC_EVENTS.CHALET_NC_Events.IoDataInvalid,
+					ipSourceInfo 	:= THIS^.fbSourceInfo, 
+					bWithConfirmation := FALSE);
+		fbAlarmInvalideIoData.ipArguments.Clear();
+		fbAlarmInvalideIoData.Raise(0);
+	ELSE
+		//Alarm is already active
+		;
+	END_IF
+	
+	
+	//Write DriveDeviceError(Axis.NcToPlc.StateDWord.28) in TC3 Eventlogger
+	IF (NOT THIS^.Axis.NcToPlc.StateDWord.28 AND fbAlarmDriveDeviceError.bRaised) THEN
+		//No error - Reset	
+		fbAlarmDriveDeviceError.Clear(0,0);
+				
+	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.28) THEN
+		; //Nothing
+		
+	ELSIF (THIS^.Axis.NcToPlc.StateDWord.28 AND NOT fbAlarmDriveDeviceError.bRaised) THEN
+		//New Error - Create and Raise
+		fbAlarmDriveDeviceError.CreateEx(	
+					stEventEntry:= TC_EVENTS.CHALET_NC_Events.DriveDeviceError,
+					ipSourceInfo 	:= THIS^.fbSourceInfo, 
+					bWithConfirmation := FALSE);
+		fbAlarmDriveDeviceError.ipArguments.Clear();
+		fbAlarmDriveDeviceError.Raise(0);
+	ELSE
+		//Alarm is already active
+		;
+	END_IF
+	
+	
+	//Write SoftLimitMinExceeded(Axis.NcToPlc.StateDWord.26) in TC3 Eventlogger
+	IF (NOT THIS^.Axis.NcToPlc.StateDWord.26 AND fbAlarmSoftLimitMinExceeded.bRaised) THEN
+		//No error - Reset	
+		fbAlarmSoftLimitMinExceeded.Clear(0,0);		
+		
+	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.26) THEN
+		; //Nothing
+	
+	ELSIF (THIS^.Axis.NcToPlc.StateDWord.26 AND NOT fbAlarmSoftLimitMinExceeded.bRaised) THEN
+		//New Error - Create and Raise
+		fbAlarmSoftLimitMinExceeded.CreateEx(	
+					stEventEntry:= TC_EVENTS.CHALET_NC_Events.SoftLimitMinExceeded,
+					ipSourceInfo 	:= THIS^.fbSourceInfo, 
+					bWithConfirmation := FALSE);
+		fbAlarmSoftLimitMinExceeded.ipArguments.Clear();
+		fbAlarmSoftLimitMinExceeded.Raise(0);
+	ELSE
+		//Alarm is already active
+		;
+	END_IF
+	
+	
+	//Write SoftLimitMaxExceeded(Axis.NcToPlc.StateDWord.27) in TC3 Eventlogger
+	IF (NOT THIS^.Axis.NcToPlc.StateDWord.27 AND fbAlarmSoftLimitMaxExceeded.bRaised) THEN
+		//No error - Reset	
+		fbAlarmSoftLimitMaxExceeded.Clear(0,0);
+				
+	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.27) THEN
+		; //Nothing
+	
+	ELSIF (THIS^.Axis.NcToPlc.StateDWord.27 AND NOT fbAlarmSoftLimitMaxExceeded.bRaised) THEN
+		//New Error - Create and Raise
+		fbAlarmSoftLimitMaxExceeded.CreateEx(	
+					stEventEntry:= TC_EVENTS.CHALET_NC_Events.SoftLimitMaxExceeded,
+					ipSourceInfo 	:= THIS^.fbSourceInfo, 
+					bWithConfirmation := FALSE);
+		fbAlarmSoftLimitMaxExceeded.ipArguments.Clear();
+		fbAlarmSoftLimitMaxExceeded.Raise(0);
+	ELSE
+		//Alarm is already active
+		;
+	END_IF
+	
 END_IF
 	]]></ST>
       </Implementation>
@@ -1219,19 +1352,13 @@ END_IF
 METHOD Reset : I_CH_Feedback
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF THIS^.fbFeedback.Busy THEN		
-	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
-	//Axis has an aktive Job
-	
-	
-ELSE
-	THIS^.eActiveCommand 				:= E_NcAxisCommands.Reset;	
-	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
-	THIS^.fbFeedback.Busy 				:= TRUE;
-	
-	THIS^.fbReset.Execute				:= TRUE;
+        <ST><![CDATA[THIS^.eActiveCommand 				:= E_NcAxisCommands.Reset;	
+THIS^.fbFeedback.LastCommandAccepted:= TRUE;
+THIS^.fbFeedback.Busy 				:= TRUE;
 
-END_IF
+THIS^.fbReset.Execute				:= TRUE;
+
+
 Reset := THIS^.fbFeedback;]]></ST>
       </Implementation>
     </Method>
@@ -1407,6 +1534,7 @@ CASE THIS^.eActiveCommand OF
 		//Display if a NC Error is active during no command is active
 		IF THIS^.Axis.Status.Error AND NOT fbFeedback.Error THEN 
 			fbFeedback.ErrorId 			:= THIS^.Axis.Status.ErrorID;
+			fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);
 		END_IF
 		
 	E_NcAxisCommands.Initialize:
@@ -1483,7 +1611,7 @@ END_CASE
 
 
 // **********************  Stop to execute commands on .done or .error ***************************
-IF THIS^.Done OR THIS^.Error THEN
+IF THIS^.fbFeedback.Done OR THIS^.fbFeedback.Error THEN
 	eActiveCommand 				:= E_NcAxisCommands.None;
 END_IF
 

@@ -98,13 +98,6 @@ PROPERTY DefaultVelocity : LREAL
         <Declaration><![CDATA[]]></Declaration>
       </Set>
     </Property>
-    <Property Name="Feedback" Id="{7a89218f-24b9-4a7c-a1f6-ee9a7d16c8ee}" FolderPath="Status\">
-      <Declaration><![CDATA[{attribute 'monitoring':='call'}
-PROPERTY Feedback : I_CH_Feedback]]></Declaration>
-      <Get Name="Get" Id="{a05df69b-72a0-4f2c-a42f-c3610fd710a3}">
-        <Declaration><![CDATA[]]></Declaration>
-      </Get>
-    </Property>
     <Method Name="GearIn" Id="{5b001519-d7ba-4197-8838-e48ddba80722}" FolderPath="Command\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA connection
 (*! 
