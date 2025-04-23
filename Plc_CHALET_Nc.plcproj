@@ -18,13 +18,14 @@
     <Company>Beckhoff CH</Company>
     <Released>false</Released>
     <Title>CHALET_Nc</Title>
-    <ProjectVersion>3.2.1</ProjectVersion>
+    <ProjectVersion>3.3.1</ProjectVersion>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="COMPONENTs" />
     <Folder Include="COMPONENTs\Optional\Adapter AXIS_REF" />
     <Folder Include="COMPONENTs\Optional\Adapter HMI" />
     <Folder Include="COMPONENTs\Optional\Casting" />
+    <Folder Include="COMPONENTs\Optional\Feedback" />
     <Folder Include="COMPONENTs\Optional\Reset" />
     <Folder Include="COMPONENTs\Optional\SetActPosition" />
     <Folder Include="COMPONENTs\Main FB" />
@@ -47,6 +48,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="COMPONENTs\Optional\Casting\ToNcAxisPLC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="COMPONENTs\Optional\Feedback\FB_NcFeedback.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="COMPONENTs\Optional\Reset\FB_Reset_NC_Sercos_CANopen.TcPOU">
@@ -221,7 +225,7 @@
                   <d n="SubKeys" t="Hashtable" />
                   <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
                     <v>bActive</v>
-                    <v>False</v>
+                    <v>True</v>
                   </d>
                 </o>
                 <v>6</v>

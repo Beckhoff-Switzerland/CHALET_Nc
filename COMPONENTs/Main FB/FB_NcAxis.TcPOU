@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="FB_NcAxis" Id="{c3f3b517-fda2-449a-a20f-a5e67bef0aa3}" SpecialFunc="None">
     <Declaration><![CDATA[// The warning " Interface of overridden methode xxx of base I_xxx doesn't match declaration" can be disabled here. 
 {warning disable C0094 }
@@ -23,6 +23,14 @@ VAR
 	{attribute 'hide'}
 	stAxisParameterSet 		: TC2_MC2.ST_AxisParameterSet;
 	
+	//Velocity override in % for all movement commands. (0 ≤ Override ≤ 100.0)
+	{attribute 'hide'}
+	fOverride : LREAL := 100.0;
+	//Feed enable in x direction. Only takes effect if Enable = TRUE.
+	{attribute 'hide'}
+	bLockNegativeDirection : BOOL := FALSE;
+	{attribute 'hide'}
+	bLockPositiveDirection : BOOL := FALSE;
 	
 	//GearIn
 	{attribute 'hide'}
@@ -42,7 +50,7 @@ VAR
 	fbDummyAxisRef		: TC2_MC2.AXIS_REF; // AxisRef whitout linked Nc
 	
 	{attribute 'hide'}               	
-	fbFeedback 			: CHALET_BaseComponents.FB_CH_Feedback(ipSourceInfo := fbSourceInfo);	
+	fbFeedback 			: FB_NcFeedback(ipSourceInfo := fbSourceInfo);	
 	
  	{attribute 'hide'}                   	
 	eActiveCommand 		: E_NcAxisCommands := E_NcAxisCommands.None;
@@ -51,6 +59,8 @@ VAR
 	fbPower 			: MC_Power;
 	{attribute 'hide'}
 	fbStop 				: MC_Stop;
+	{attribute 'hide'}
+	fbHoming 			: MC_Home;
 	{attribute 'hide'}
 	fbReset 			: FB_Reset_NC_Sercos_CANopen; 		//MC_Reset extension. can detect sercos and can and reset all faults.
 	{attribute 'hide'}
@@ -296,17 +306,12 @@ VAR_INPUT
 	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
 	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
 END_VAR
-VAR_INST
-	{attribute 'hide'}
-	bFBInitCalledOnce : BOOL; //Do the following code once during start up and not during onlinechange
-END_VAR]]></Declaration>
+]]></Declaration>
       <Implementation>
         <ST><![CDATA[//Do the following code once during start up and not during onlinechange
-IF NOT bFBInitCalledOnce THEN 
+IF NOT bInCopyCode THEN 
 	THIS^.fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);	
 END_IF
-
-bFBInitCalledOnce := TRUE;
 ]]></ST>
       </Implementation>
     </Method>
@@ -396,6 +401,7 @@ ELSIF THIS^.Axis.Status.Moving THEN
 
 ELSE
 	THIS^.eActiveCommand 				:= E_NcAxisCommands.GearIn;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;
 	THIS^.fbFeedback.Busy 				:= TRUE;
 	
@@ -446,6 +452,7 @@ METHOD GearOut  : I_CH_Feedback
         <ST><![CDATA[
 
 THIS^.eActiveCommand 				:= E_NcAxisCommands.GearOut;
+THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 THIS^.fbFeedback.LastCommandAccepted:= TRUE;
 THIS^.fbFeedback.Busy 				:= TRUE;
 
@@ -462,6 +469,74 @@ THIS^.ipMultiGearMasterAxis4 		:= 0;
 GearOut := THIS^.fbFeedback;]]></ST>
       </Implementation>
     </Method>
+    <Method Name="Homing" Id="{694eaa10-dbf1-4bee-b436-cde0f0559767}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} 
+(*The parameterization of the home command takes place in the NC! To do this, set the parameters in:
+- NC-Axis(Parameters) Homing speed
+- NC-Axis>Encoder(Parameters) Homing mode
+	Reference Mode: "Homing Sensor Only"
+	Homing Sensor Source "Digital Input x" 
+		Link Input to NC-Axis>Drive>Inputs>nState8.x
+		
+The "HomeingSensor" property can also be used to control a home sensor via PLC.		
+*)
+(*Homing refers to an axis initialization run during which the correct actual position is determined by means of a reference signal. This can be NC-guided, as default described here:
+  - The axis is at a random position.
+  - The axis moves in the parameterized direction and searches for the reference switch (referencing cam/calibration cam).
+  - The axis reverses as soon as the referencing cam is detected.
+  - The axis moves away from the referencing cam and detects the falling edge of the cam signal.
+  - The reference position is set and the axis stops. The standstill position of the axis deviates slightly from the reference position.*)
+METHOD Homing  : I_CH_Feedback
+VAR_INPUT
+	(*Absolute reference position to which the axis is set after homing*)
+	fPosition		: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.fbFeedback.Error THEN
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Error active/not ready
+
+ELSIF NOT THIS^.BufferEmpty THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Buffer not ready to store next motion command	
+	
+ELSIF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.DiscreteMotion OR THIS^.Axis.Status.ContinuousMotion OR THIS^.Axis.Status.SynchronizedMotion) THEN		
+	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;
+	//Axis in wrong State
+
+	
+ELSE
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.Homing;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
+	THIS^.fbFeedback.LastCommandAccepted:= TRUE;                                  
+	THIS^.fbFeedback.Busy 				:= TRUE;
+	                                    
+	THIS^.fbHoming.Execute				:= TRUE;
+	 (* default homing as defined in the SystemManager encoder parameters *)
+	THIS^.fbHoming.HomingMode			:= MC_HomingMode.MC_DefaultHoming;
+	
+	THIS^.fbHoming.Position				:= fPosition;
+	
+END_IF
+
+
+Homing := THIS^.fbFeedback;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="HomingSensor" Id="{2c8c5ca9-e130-4fe3-a298-a1ec926036ca}" FolderPath="Command\">
+      <Declaration><![CDATA[//A home input switch can be linked here. Whether this works depends heavily on how the settings in the NC2-axis and NC2-axis-encoder are configured.
+PROPERTY HomingSensor : BOOL]]></Declaration>
+      <Set Name="Set" Id="{76b0b6ec-0b08-4c7a-a303-d5d5149507fe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.fbHoming.bCalibrationCam := HomingSensor;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
     <Method Name="Initialize" Id="{d41fa56e-09ad-452f-ad55-c5035cc0c481}">
       <Declaration><![CDATA[METHOD Initialize : HRESULT
 VAR_INST
@@ -477,17 +552,19 @@ VAR_INST
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[IF NOT THIS^.bInitDone THEN
-	Initialize := S_PENDING;
-	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(E_NcAxisCommands.Initialize);
 	THIS^.eActiveCommand 				:= E_NcAxisCommands.Initialize;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;		
-	THIS^.fbFeedback.Busy 				:= TRUE;
+
+
 	
 	// Check if link to NC is mapped
 	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND NOT THIS^.Mapped THEN
 		IF NOT fbInitError.bRaised THEN 
 			//This error cannot be reset. Requires a reset cold
-			fbInitError.CreateEx(stEventEntry:=TC_EVENTS.CHALET_NC_Events.VariableLinkMissing, ipSourceInfo := THIS^.fbSourceInfo, bWithConfirmation := FALSE);
+			fbInitError.CreateEx(	stEventEntry	:=TC_EVENTS.CHALET_NC_Events.VariableLinkMissing,
+									ipSourceInfo 	:= THIS^.fbSourceInfo, 
+									bWithConfirmation := FALSE);
 			stVarInfo := __VARINFO(Axis);
 			fbInitError.ipArguments.AddString(stVarInfo.Symbol);
 			fbInitError.Raise(0);
@@ -499,7 +576,7 @@ END_VAR]]></Declaration>
 	
 	// Check and wait until NC Task is in a valid running state
 	IF NcParameterlist.ERROR_IF_NC_AXIS_IS_NOT_MAPPED AND THIS^.Axis.NcToPlc.AxisId = 0 THEN
-		//ERROR PlcToNc
+		GetMostSignificant(Initialize, S_Pending);
 		RETURN;
 	END_IF
 	
@@ -529,10 +606,8 @@ END_VAR]]></Declaration>
 	
 		
 	// Set init done signal  
-	THIS^.bInitDone := fbReadDriveAddress.Done AND fbReadParameterSet.Done;
+	THIS^.bInitDone := fbReadDriveAddress.Done AND fbReadParameterSet.Done AND Initialize = S_OK;
 		
-ELSE
-	Initialize := S_OK;	
 END_IF
 
 THIS^.fbFeedback.HR := Initialize;]]></ST>
@@ -563,6 +638,78 @@ END_VAR
           <ST><![CDATA[LagDistance := THIS^.Axis.NcToPlc.PosDiff;]]></ST>
         </Implementation>
       </Get>
+    </Property>
+    <Property Name="LockNegativeDirection" Id="{c7bd0320-b577-40d7-b7ba-fed833d89faa}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockNegativeDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e0e359e9-44bf-465a-bcea-9e1d0edffed3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[LockNegativeDirection := bLockNegativeDirection;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4b69c559-4e83-47e9-85f0-f148667d977b}">
+        <Declaration><![CDATA[VAR_INST
+	{attribute 'hide'}
+	fbInfoFeedDisabled : FB_TcAlarm;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.bLockNegativeDirection := LockNegativeDirection;
+
+
+//Creat an info in TC3_Eventlogger
+IF NOT fbInfoFeedDisabled.bRaised AND THIS^.bLockNegativeDirection THEN
+	fbInfoFeedDisabled.CreateEx(stEventEntry := TC_EVENTS.CHALET_NC_Events.FeedNegativeDisabled, bWithConfirmation := FALSE, ipSourceInfo := THIS^.fbSourceInfo);
+	fbInfoFeedDisabled.Raise(0);
+	
+ELSIF NOT THIS^.bLockNegativeDirection THEN
+	fbInfoFeedDisabled.Clear(0, 0);
+END_IF
+
+
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="LockPositiveDirection" Id="{d2723920-ccec-41d2-87a4-537471f63285}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockPositiveDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f60fd2f4-d567-4bb9-b604-44831ebfd153}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[LockPositiveDirection := bLockPositiveDirection;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ce133319-42b7-4387-9dc0-afaee7f3f854}">
+        <Declaration><![CDATA[VAR_INST
+	{attribute 'hide'}
+	fbInfoFeedDisabled : FB_TcAlarm;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.bLockPositiveDirection := LockPositiveDirection;
+
+
+//Creat an info in TC3_Eventlogger
+IF NOT fbInfoFeedDisabled.bRaised AND THIS^.bLockPositiveDirection THEN
+	fbInfoFeedDisabled.CreateEx(stEventEntry := TC_EVENTS.CHALET_NC_Events.FeedPositiveDisabled, bWithConfirmation := FALSE, ipSourceInfo := THIS^.fbSourceInfo);
+	fbInfoFeedDisabled.Raise(0);
+	
+ELSIF NOT THIS^.bLockPositiveDirection THEN
+	fbInfoFeedDisabled.Clear(0, 0);
+END_IF
+
+
+]]></ST>
+        </Implementation>
+      </Set>
     </Property>
     <Property Name="Mapped" Id="{4b078e23-6dd2-470d-85e0-b93c24556389}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
@@ -660,6 +807,7 @@ ELSE
 	END_IF
 	
 	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveAbsolute;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;		
 	THIS^.fbFeedback.Busy 				:= TRUE;
 	
@@ -778,6 +926,7 @@ ELSE
 	END_IF
 
 	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveRelative;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;                                  
 	THIS^.fbFeedback.Busy 				:= TRUE;
 	                                    
@@ -898,6 +1047,7 @@ ELSE
 	END_IF
 	
 	THIS^.eActiveCommand 				:= E_NcAxisCommands.MoveVelocity;	
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;	
 	THIS^.fbFeedback.Busy 				:= TRUE;
 	
@@ -1015,6 +1165,7 @@ ELSIF THIS^.Axis.Status.Moving THEN
 	
 ELSE
 	THIS^.eActiveCommand 					:= E_NcAxisCommands.MultiGearIn;
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted	:= TRUE;
 	THIS^.fbFeedback.Busy 					:= TRUE;
 	
@@ -1133,6 +1284,29 @@ END_VAR
         </Implementation>
       </Get>
     </Property>
+    <Property Name="Override" Id="{7d4fb26b-2553-4736-9091-8b9eada67dca}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+//Velocity override in % for all movement commands. (0 ≤ Override ≤ 100.0)
+PROPERTY Override : LREAL]]></Declaration>
+      <Get Name="Get" Id="{1def97ff-a1b1-4a5c-8e69-b3e64125531d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Override := THIS^.fOverride;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1f3a5144-96dc-446d-a3c3-bcc7dffd3240}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Syntax: OUT := LIMIT(Min, IN, Max) - Max is the upper bound, Min is the lower bound for the result. If the value IN exceeds the upper bound Max, LIMIT returns Max. If IN falls below Min, the result is Min.
+THIS^.fOverride := LIMIT(0.0, Override, 100.0);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
     <Property Name="Port" Id="{8905d5cd-70ce-45d7-b32e-92cc61e5090c}" FolderPath="Admin\">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
 PROPERTY Port : WORD]]></Declaration>
@@ -1153,14 +1327,11 @@ METHOD PowerOff  : I_CH_Feedback
       <Implementation>
         <ST><![CDATA[//No IF. Allways allow to disable the power
 THIS^.eActiveCommand 				:= E_NcAxisCommands.PowerOff;	
+THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 THIS^.fbFeedback.LastCommandAccepted:= TRUE;
 THIS^.fbFeedback.Busy 				:= TRUE;	
 
 THIS^.fbPower.Enable				:= FALSE;
-THIS^.fbPower.Enable_Positive		:= FALSE;
-THIS^.fbPower.Enable_Negative		:= FALSE;
-THIS^.fbPower.Override				:= 0.0; 
-
 
 
 PowerOff := THIS^.fbFeedback;
@@ -1181,14 +1352,14 @@ ELSIF NOT(THIS^.Axis.Status.Disabled) THEN
 	//Axis in wrong State
 	
 ELSE
-	THIS^.eActiveCommand 				:= E_NcAxisCommands.PowerOn;     
+	THIS^.eActiveCommand 				:= E_NcAxisCommands.PowerOn; 
+	THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);    
 	THIS^.fbFeedback.LastCommandAccepted:= TRUE;                        	
 	THIS^.fbFeedback.Busy 				:= TRUE;
 	                                	
 	THIS^.fbPower.Enable				:= TRUE;
 	THIS^.fbPower.Enable_Positive		:= TRUE;
 	THIS^.fbPower.Enable_Negative		:= TRUE;
-	THIS^.fbPower.Override				:= 100.0; 
 END_IF
 
 
@@ -1203,10 +1374,12 @@ PowerOn := THIS^.fbFeedback;
 	Use this Methode to calculate time sensitive date once each cycle. Example: read analog input and convert before do get Signal propertie
 *)
 METHOD PROTECTED Prepare : HRESULT
+VAR
+	bErrorCondition : BOOL;
+END_VAR
 VAR_INST
 	{attribute 'hide'}	
 	nLastUpdatedCycleCount : UDINT;
-
 	{attribute 'hide'}	
 	nOldErrorCode 		: UDINT;
 	{attribute 'hide'}	
@@ -1227,16 +1400,19 @@ END_VAR
 IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex].CycleCount THEN
 	nLastUpdatedCycleCount := TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex].CycleCount ;
 
+	
 	// Refresh Axis Information 
 	Axis.ReadStatus();
 	
 	
+	
 	//Write NC-Error(Axis.NcToPlc.ErrorCode) in TC3 Eventlogger
-	IF (THIS^.Axis.NcToPlc.ErrorCode = 0 AND fbAlarmNc.bRaised) THEN
+	bErrorCondition := NOT (THIS^.Axis.NcToPlc.ErrorCode = 0);
+	IF (NOT bErrorCondition AND fbAlarmNc.bRaised) THEN
 		//No error - Reset	
 		fbAlarmNc.Clear(0,0);
 		
-	ELSIF (THIS^.Axis.NcToPlc.ErrorCode = 0) THEN
+	ELSIF (NOT bErrorCondition) THEN
 		; //Nothing
 		
 	ELSIF (nOldErrorCode <> THIS^.Axis.NcToPlc.ErrorCode) THEN
@@ -1256,15 +1432,17 @@ IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex
 	nOldErrorCode := THIS^.Axis.NcToPlc.ErrorCode;
 	
 	
+	
 	//Write InvalideIoData(Axis.NcToPlc.StateDWord.30) in TC3 Eventlogger
-	IF (NOT THIS^.Axis.NcToPlc.StateDWord.30 AND fbAlarmInvalideIoData.bRaised) THEN
+	bErrorCondition := THIS^.Axis.NcToPlc.StateDWord.30;
+	IF (NOT bErrorCondition AND fbAlarmInvalideIoData.bRaised) THEN
 		//No error - Reset	
 		fbAlarmInvalideIoData.Clear(0,0);
 		
-	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.30) THEN
+	ELSIF (NOT bErrorCondition) THEN
 		; //Nothing
 			
-	ELSIF (THIS^.Axis.NcToPlc.StateDWord.30 AND NOT fbAlarmInvalideIoData.bRaised) THEN
+	ELSIF (bErrorCondition AND NOT fbAlarmInvalideIoData.bRaised) THEN
 		//New Error - Create and Raise
 		fbAlarmInvalideIoData.CreateEx(	
 					stEventEntry:= TC_EVENTS.CHALET_NC_Events.IoDataInvalid,
@@ -1278,15 +1456,17 @@ IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex
 	END_IF
 	
 	
-	//Write DriveDeviceError(Axis.NcToPlc.StateDWord.28) in TC3 Eventlogger
-	IF (NOT THIS^.Axis.NcToPlc.StateDWord.28 AND fbAlarmDriveDeviceError.bRaised) THEN
+	
+	//Write DriveDeviceError(Axis.NcToPlc.StateDWord.28) in TC3 Eventlogger. Ignore if axis is disabled, to many errors in STO
+	bErrorCondition := THIS^.Axis.NcToPlc.StateDWord.28 AND THIS^.Enabled;
+	IF (NOT bErrorCondition AND fbAlarmDriveDeviceError.bRaised) THEN
 		//No error - Reset	
 		fbAlarmDriveDeviceError.Clear(0,0);
 				
-	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.28) THEN
+	ELSIF (NOT bErrorCondition) THEN
 		; //Nothing
 		
-	ELSIF (THIS^.Axis.NcToPlc.StateDWord.28 AND NOT fbAlarmDriveDeviceError.bRaised) THEN
+	ELSIF (bErrorCondition AND NOT fbAlarmDriveDeviceError.bRaised) THEN
 		//New Error - Create and Raise
 		fbAlarmDriveDeviceError.CreateEx(	
 					stEventEntry:= TC_EVENTS.CHALET_NC_Events.DriveDeviceError,
@@ -1300,15 +1480,17 @@ IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex
 	END_IF
 	
 	
+	
 	//Write SoftLimitMinExceeded(Axis.NcToPlc.StateDWord.26) in TC3 Eventlogger
-	IF (NOT THIS^.Axis.NcToPlc.StateDWord.26 AND fbAlarmSoftLimitMinExceeded.bRaised) THEN
+	bErrorCondition := THIS^.Axis.NcToPlc.StateDWord.26;
+	IF (NOT bErrorCondition AND fbAlarmSoftLimitMinExceeded.bRaised) THEN
 		//No error - Reset	
 		fbAlarmSoftLimitMinExceeded.Clear(0,0);		
 		
-	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.26) THEN
+	ELSIF (NOT bErrorCondition) THEN
 		; //Nothing
 	
-	ELSIF (THIS^.Axis.NcToPlc.StateDWord.26 AND NOT fbAlarmSoftLimitMinExceeded.bRaised) THEN
+	ELSIF (bErrorCondition AND NOT fbAlarmSoftLimitMinExceeded.bRaised) THEN
 		//New Error - Create and Raise
 		fbAlarmSoftLimitMinExceeded.CreateEx(	
 					stEventEntry:= TC_EVENTS.CHALET_NC_Events.SoftLimitMinExceeded,
@@ -1322,15 +1504,17 @@ IF nLastUpdatedCycleCount <> TwinCAT_SystemInfoVarList._TaskInfo[THIS^.TaskIndex
 	END_IF
 	
 	
+	
 	//Write SoftLimitMaxExceeded(Axis.NcToPlc.StateDWord.27) in TC3 Eventlogger
-	IF (NOT THIS^.Axis.NcToPlc.StateDWord.27 AND fbAlarmSoftLimitMaxExceeded.bRaised) THEN
+	bErrorCondition := THIS^.Axis.NcToPlc.StateDWord.27;
+	IF (NOT bErrorCondition AND fbAlarmSoftLimitMaxExceeded.bRaised) THEN
 		//No error - Reset	
 		fbAlarmSoftLimitMaxExceeded.Clear(0,0);
 				
-	ELSIF (NOT THIS^.Axis.NcToPlc.StateDWord.27) THEN
+	ELSIF (NOT bErrorCondition) THEN
 		; //Nothing
 	
-	ELSIF (THIS^.Axis.NcToPlc.StateDWord.27 AND NOT fbAlarmSoftLimitMaxExceeded.bRaised) THEN
+	ELSIF (bErrorCondition AND NOT fbAlarmSoftLimitMaxExceeded.bRaised) THEN
 		//New Error - Create and Raise
 		fbAlarmSoftLimitMaxExceeded.CreateEx(	
 					stEventEntry:= TC_EVENTS.CHALET_NC_Events.SoftLimitMaxExceeded,
@@ -1353,6 +1537,7 @@ METHOD Reset : I_CH_Feedback
 ]]></Declaration>
       <Implementation>
         <ST><![CDATA[THIS^.eActiveCommand 				:= E_NcAxisCommands.Reset;	
+THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 THIS^.fbFeedback.LastCommandAccepted:= TRUE;
 THIS^.fbFeedback.Busy 				:= TRUE;
 
@@ -1386,6 +1571,7 @@ END_VAR]]></Declaration>
         <ST><![CDATA[IF NOT(THIS^.Axis.Status.StandStill OR THIS^.Axis.Status.Disabled OR THIS^.Axis.Status.ErrorStop) THEN	
 	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
 	//Axis in wrong State
+	//zzz todo set error 33105
 	
 ELSIF THIS^.Axis.Status.Coupled THEN	
 	THIS^.fbFeedback.LastCommandAccepted	:= FALSE;	
@@ -1393,6 +1579,7 @@ ELSIF THIS^.Axis.Status.Coupled THEN
 	
 ELSE
 	THIS^.eActiveCommand 					:= E_NcAxisCommands.SetPosition;
+	THIS^.fbFeedback.ActiveCommand 			:= TO_STRING(THIS^.eActiveCommand);
 	THIS^.fbFeedback.LastCommandAccepted	:= TRUE;
 	THIS^.fbFeedback.Busy 					:= TRUE;
 	                                    	
@@ -1461,6 +1648,7 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[//No IF. Allways allow to stop the ax
 THIS^.eActiveCommand 				:= E_NcAxisCommands.Stop;
+THIS^.fbFeedback.ActiveCommand 		:= TO_STRING(THIS^.eActiveCommand);
 THIS^.fbFeedback.LastCommandAccepted:= TRUE;
 THIS^.fbFeedback.Busy 				:= TRUE;	
 
@@ -1524,17 +1712,12 @@ THIS^.Prepare();//Prepare time-critical information, if not already done
 
 
 // ********************** Set feedback depending on active command *******************************
-IF THIS^.eActiveCommand <> E_NcAxisCommands.None THEN
-	fbFeedback.ActiveCommand 	:= TO_STRING(THIS^.eActiveCommand);	
-END_IF
-
-
 CASE THIS^.eActiveCommand OF
 	E_NcAxisCommands.None: 
 		//Display if a NC Error is active during no command is active
 		IF THIS^.Axis.Status.Error AND NOT fbFeedback.Error THEN 
+			fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);			
 			fbFeedback.ErrorId 			:= THIS^.Axis.Status.ErrorID;
-			fbFeedback.ActiveCommand 	:= TO_STRING(E_NcAxisCommands.None);
 		END_IF
 		
 	E_NcAxisCommands.Initialize:
@@ -1561,6 +1744,11 @@ CASE THIS^.eActiveCommand OF
 		fbFeedback.Busy 		:= fbSetPosition.Busy;
 		fbFeedback.Done 		:= fbSetPosition.Done;
 		fbFeedback.ErrorId 		:= fbSetPosition.ErrorID;
+		
+	E_NcAxisCommands.Homing:
+		fbFeedback.Busy 		:= fbHoming.Busy;
+		fbFeedback.Done 		:= fbHoming.Done;
+		fbFeedback.ErrorId 		:= fbHoming.ErrorID;
 		
 	E_NcAxisCommands.Stop: 
 		fbFeedback.Busy 		:= fbStop.Busy;
@@ -1645,24 +1833,35 @@ END_IF
 
 
 // **********************  Cyclic calls  *********************************************************
-fbPower(Axis := THIS^.Axis);
+fbPower(Axis 			:= THIS^.Axis, 
+		Override 		:= THIS^.fOverride,
+		Enable_Positive := NOT THIS^.bLockPositiveDirection,
+		Enable_Negative := NOT THIS^.bLockNegativeDirection);
 fbStop(Axis := THIS^.Axis);
 fbReset(Axis := THIS^.Axis);
+fbHoming(	Axis := THIS^.Axis);
 fbGearOut(Slave := THIS^.Axis);
 fbSetPosition(Axis := THIS^.Axis);
-fbGearIn(Master := fbGearMasterAxisRef, Slave := THIS^.Axis);
-fbGearInMultiMaster(Master1:=fbMultiGearMasterAxisRef1, Master2:=fbMultiGearMasterAxisRef2, Master3:=fbMultiGearMasterAxisRef3, Master4:=fbMultiGearMasterAxisRef4, Slave:=THIS^.Axis);
 fbMoveRelative[0](Axis := THIS^.Axis); 
 fbMoveRelative[1](Axis := THIS^.Axis);
 fbMoveAbsolute[0](Axis := THIS^.Axis); 
 fbMoveAbsolute[1](Axis := THIS^.Axis);
 fbMoveVelocity[0](Axis := THIS^.Axis); 
 fbMoveVelocity[1](Axis := THIS^.Axis);
-
+fbGearIn(	Master 	:= fbGearMasterAxisRef, 
+			Slave 	:= THIS^.Axis);
+fbGearInMultiMaster(	Master1		:=fbMultiGearMasterAxisRef1, 
+						Master2		:=fbMultiGearMasterAxisRef2,
+					 	Master3		:=fbMultiGearMasterAxisRef3, 
+						Master4		:=fbMultiGearMasterAxisRef4, 
+						Slave		:=THIS^.Axis);
+						
+						
 // ********************** Reset all Execution flags **********************************************
 fbGearinMultiMaster.Enable := FALSE;
 fbStop.Execute := FALSE;
 fbReset.Execute := FALSE;
+fbHoming.Execute := FALSE;
 fbGearOut.Execute := FALSE;
 fbSetPosition.Execute := FALSE;
 fbGearIn.Execute := FALSE;

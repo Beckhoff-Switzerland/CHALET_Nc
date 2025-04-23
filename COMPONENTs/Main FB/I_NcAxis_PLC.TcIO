@@ -154,10 +154,55 @@ You can stop the axis with the function blocks MC_Halt or MC_Stop.*)
 METHOD GearOut  : I_CH_Feedback
 ]]></Declaration>
     </Method>
+    <Method Name="Homing" Id="{bc19c055-95bc-4119-9f33-a24c1a696958}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} 
+(*The parameterization of the home command takes place in the NC! To do this, set the parameters in:
+- NC-Axis(Parameters) Homing speed
+- NC-Axis>Encoder(Parameters) Homing mode
+	Reference Mode: "Homing Sensor Only"
+	Homing Sensor Source "Digital Input x" 
+		Link Input to NC-Axis>Drive>Inputs>nState8.x
+*)
+(*Homing refers to an axis initialization run during which the correct actual position is determined by means of a reference signal. This can be NC-guided, as default described here:
+  - The axis is at a random position.
+  - The axis moves in the parameterized direction and searches for the reference switch (referencing cam/calibration cam).
+  - The axis reverses as soon as the referencing cam is detected.
+  - The axis moves away from the referencing cam and detects the falling edge of the cam signal.
+  - The axis continues to move and searches for the sync pulse (latch signal or zero pulse of the encoder).
+  - The reference position is set and the axis stops. The standstill position of the axis deviates slightly from the reference position.*)
+METHOD Homing  : I_CH_Feedback
+VAR_INPUT
+	(*Absolute reference position to which the axis is set after homing*)
+	fPosition		: LREAL;
+END_VAR
+]]></Declaration>
+    </Method>
     <Method Name="Initialize" Id="{8a2b25f3-bade-4019-b747-96e6c7e610b0}">
       <Declaration><![CDATA[METHOD Initialize : HRESULT
 ]]></Declaration>
     </Method>
+    <Property Name="LockNegativeDirection" Id="{14500fbc-7b33-48a3-bfb9-dcb8f63773bf}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockNegativeDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{878fd486-81da-4b9b-b1bf-886d6c6d26b6}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{dce98afc-594a-4fb5-88af-98d38297578e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="LockPositiveDirection" Id="{7a7e4b22-0a0a-4e32-9efa-0a6722cb5cc0}" FolderPath="Command\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockPositiveDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{04c3725b-8ed5-4ad3-8769-ceb10708d4c5}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{3ae5c8f1-e417-40ba-99ac-105f6cb5b68b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
     <Method Name="MoveAbsolute" Id="{2bac8adf-a73a-46fa-b737-8c5e2f63ea19}" FolderPath="Command\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection
 METHOD MoveAbsolute  : I_CH_Feedback
@@ -303,6 +348,18 @@ PROPERTY NcDriveType : Tc2_MC2.E_NcDriveType]]></Declaration>
       <Get Name="Get" Id="{9c73d535-a038-4ade-b0b3-6dc900097296}">
         <Declaration><![CDATA[]]></Declaration>
       </Get>
+    </Property>
+    <Property Name="Override" Id="{ee0bcd46-eda6-413a-bdb4-75738621f944}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+//Velocity override in % for all movement commands. (0 ≤ Override ≤ 100.0)
+PROPERTY Override : LREAL]]></Declaration>
+      <Get Name="Get" Id="{8f21f7b3-84e1-4961-8402-a58b54cd8fc4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{a833e8f7-5bd1-45fe-9845-bce5cb979609}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
     </Property>
     <Method Name="PowerOff" Id="{e023f10d-719f-4ab0-9e9b-aa3c8fc23964}" FolderPath="Command\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable':='1'} //call methode via OPC-UA conection

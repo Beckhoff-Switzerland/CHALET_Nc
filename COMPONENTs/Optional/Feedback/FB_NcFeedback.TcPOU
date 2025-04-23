@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_NcFeedback" Id="{fe1cb9ab-7035-44ca-a31e-b0aaf251d1e2}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_explicit_call' := 'Do not call the body - Stick to OOP'}
+//In addition to the normal FB_Feedback object on the CHALET-Base Library, 
+//this function block also checks whether the set ErrorID has been defined 
+//in the NC event list and retrieves the translation from there.
+FUNCTION_BLOCK FB_NcFeedback EXTENDS CHALET_BaseComponents.FB_CH_Feedback
+VAR
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="UpdateEventlogger" Id="{9531926f-44fa-4366-82f2-11ea2e823c45}">
+      <Declaration><![CDATA[METHOD PROTECTED UpdateEventlogger : BOOL
+VAR
+	nHR : DWORD;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.ipSourceInfo = 0 THEN
+	//No TC3_Eventlogger alarm if interface is empty
+	RETURN;
+END_IF
+
+
+//New error, raise alarm
+IF (THIS^.ErrorId <> THIS^.nOldErrorId) AND THIS^.Error THEN
+	THIS^.fbAlarm.Clear(0,0);
+	THIS^.fbAlarm.CreateEx(stEventEntry := TC_EVENTS.CHALET_Base_Events.FeedbackErrorCmd, ipSourceInfo := THIS^.ipSourceInfo, bWithConfirmation:= FALSE);
+	//Error in feedback command {0} error id {1}
+	
+	//Convert to DWORD
+	nHR := TO_DWORD(THIS^.HR);
+	
+	//Try to get some more details about error id
+	IF THIS^.HR = E_FAIL THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddStringByValue('E_FAIL');
+		
+	ELSIF ((nHR AND 16#FFFF_FF00) = 16#9811_0000) THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId).AddEventReferenceIdGuid(nEventId := THIS^.ErrorId, EventClass := TC_EVENT_CLASSES.TcSystemEventClass);
+		;//Global error codes
+			
+	ELSIF ((nHR AND 16#FFFF_FF00) = 16#9811_0500) THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId).AddEventReferenceIdGuid(nEventId := THIS^.ErrorId, EventClass := TC_EVENT_CLASSES.TcRouterEventClass);
+		;//Router error codes
+			
+	ELSIF ((nHR AND 16#FFFF_FF00) = 16#9811_0700) THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId).AddEventReferenceIdGuid(nEventId := THIS^.ErrorId, EventClass := TC_EVENT_CLASSES.TcGeneralAdsEventClass);
+		;//General ADS errors
+			
+	ELSIF ((nHR AND 16#FFFF_FF00) = 16#9811_1000) THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId).AddEventReferenceIdGuid(nEventId := THIS^.ErrorId, EventClass := TC_EVENT_CLASSES.TcRTimeEventClass);
+		;//RTime error codes
+	
+	//NC errors are in range HEX 4000-4C50 or 8100-8167	
+	ELSIF (THIS^.ErrorId >= 16#4000 AND THIS^.ErrorId <= 16#4C50) OR (THIS^.ErrorId >= 16#8100 AND THIS^.ErrorId <= 16#8167) THEN
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId).AddEventReferenceIdGuid(nEventId := THIS^.ErrorId, EventClass := TC_EVENT_CLASSES.Tc3_NcErrorCodes);
+		;//NC Error
+	
+	ELSE
+		THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand).AddUDInt(THIS^.ErrorId);
+	END_IF
+	
+	THIS^.fbAlarm.Raise(0);
+
+	
+//Busy, raise info
+ELSIF (THIS^.Busy <> THIS^.bOldBusy) AND THIS^.Busy AND BaseParameterlist.B_WRITE_INFO_FEEDBACK_BUSY THEN
+	THIS^.fbAlarm.Clear(0,0);
+	THIS^.fbAlarm.CreateEx(stEventEntry := TC_EVENTS.CHALET_Base_Events.FeedbackBusy, ipSourceInfo := THIS^.ipSourceInfo, bWithConfirmation:= FALSE);
+	THIS^.fbAlarm.ipArguments.Clear().AddStringByValue(THIS^.ActiveCommand);
+	THIS^.fbAlarm.Raise(0);
+	
+//No error, clear alarm	
+ELSIF NOT THIS^.Error AND NOT (THIS^.Busy AND BaseParameterlist.B_WRITE_INFO_FEEDBACK_BUSY) THEN
+	THIS^.fbAlarm.Clear(0,0);
+END_IF
+
+THIS^.nOldErrorId 	:= THIS^.ErrorId;
+THIS^.bOldBusy 		:= THIS^.Busy;
+
+
+
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

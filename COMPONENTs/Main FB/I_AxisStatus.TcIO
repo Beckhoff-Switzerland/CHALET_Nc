@@ -37,6 +37,22 @@ PROPERTY LagDistance : LREAL]]></Declaration>
         <Declaration><![CDATA[]]></Declaration>
       </Get>
     </Property>
+    <Property Name="LockNegativeDirection" Id="{6b956d18-96b9-437a-9daa-2019221e2378}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockNegativeDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b132f739-4aba-4664-b92c-9f225df3866c}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="LockPositiveDirection" Id="{a9b11419-64ab-4d00-8a8e-5b24095af9c5}" FolderPath="Status\">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+//Disable the feed in one direction.
+PROPERTY LockPositiveDirection : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bb75a138-f8bd-452a-8f67-173012f093f5}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
     <Property Name="Mapped" Id="{5d597918-b21a-4ac9-9769-be7923f0c786}" FolderPath="Status\">
       <Declaration><![CDATA[{attribute 'monitoring':='call'}
 PROPERTY Mapped : BOOL]]></Declaration>
@@ -49,6 +65,15 @@ PROPERTY Mapped : BOOL]]></Declaration>
 {attribute 'monitoring':='call'}
 PROPERTY MotionState : Tc2_MC2.MC_AxisStates]]></Declaration>
       <Get Name="Get" Id="{ceb5f809-7554-0f46-0f5f-29f265091ce7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="Override" Id="{8bccb3f4-4979-4a68-80e4-dd32d21ea8a9}" FolderPath="Status\Dynamics\">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring':='call'}
+//Velocity override in % for all movement commands. (0 ≤ Override ≤ 100.0)
+PROPERTY Override : LREAL]]></Declaration>
+      <Get Name="Get" Id="{4330d94c-3455-43eb-8126-d4ccabfcfcac}">
         <Declaration><![CDATA[]]></Declaration>
       </Get>
     </Property>
