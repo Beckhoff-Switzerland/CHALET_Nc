@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="FB_SetPosition_NC_Sercos_CANopen" Id="{33ef65e9-9f88-49fe-bc08-db7c581b356d}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'hide_all_locals'}
 FUNCTION_BLOCK FB_SetPosition_NC_Sercos_CANopen
@@ -121,7 +121,7 @@ CASE nSeqCoE OF
 		nSeqCoE := 10;
 	
 	10: // ********************** SetPosition is only posible if axis is disabled **********************
-		IF NOT THIS^.Axis.Status.Disabled THEN
+		IF NOT THIS^.Axis.Status.StandStill THEN
 			nSeqCoE := nSeqCoE + 1000;
 		ELSE
 			nSeqCoE := 50;	
@@ -299,8 +299,7 @@ CASE nSeqCoE OF
 		TYPE E_PositionOffsetMemory :(
 			 ePositionOffsetMemory_Encoder := 0
 			 ePositionOffsetMemory_Drive   := 1
-		) BYTE;
-		END_TYPE *)
+		) BYTE;		END_TYPE *)
 		
 		eReadPositionOffsetMemory := UINT_TO_BYTE(eReadFromCoe - 1);
 		
@@ -400,7 +399,7 @@ CASE nSeqSoE OF
 		nSeqSoE := 10;
 	
 	10: // ********************** SetPosition is only posible if axis is disabled **********************
-		IF NOT THIS^.Axis.Status.Disabled THEN
+		IF NOT THIS^.Axis.Status.StandStill THEN
 			nSeqSoE := nSeqSoE + 1000;
 		ELSE
 			nSeqSoE := 50;	

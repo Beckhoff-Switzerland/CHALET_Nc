@@ -64,7 +64,7 @@ VAR
 	{attribute 'hide'}
 	fbReset 			: FB_Reset_NC_Sercos_CANopen; 		//MC_Reset extension. can detect sercos and can and reset all faults.
 	{attribute 'hide'}
-	fbSetPosition 		: FB_SetPosition_NC_Sercos_CANopen;	//MC_SetPosition extension. Detect sercos and can and read and use the configured store position of the position feedback.(encoder/drive/NC). Set store position in DM2.
+	fbSetPosition 		: FB_SetPosition_Beckhoff;	//MC_SetPosition extension. Detect sercos and can and read and use the configured store position of the position feedback.(encoder/drive/NC). Set store position in DM2.
 	{attribute 'hide'}
 	fbMoveRelative 		: ARRAY [0..1] OF MC_MoveRelative;//A second function block is always required to use the BufferMode. It is not possible to trigger a move function block with new parameters while it is active.
 	{attribute 'hide'}

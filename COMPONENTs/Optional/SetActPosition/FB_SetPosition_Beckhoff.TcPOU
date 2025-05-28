@@ -1,0 +1,296 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_SetPosition_Beckhoff" Id="{b534c48e-9d23-4d28-99ca-3a76e0c7e835}" SpecialFunc="None">
+    <Declaration><![CDATA[//{attribute 'hide_all_locals'}
+(*This FB reads out where the position offset is to be saved (NC/Drive/Encoder) and also stores
+ it there. Works for ELM72xx, EL72xx, Ax8xxx and Ax5xxx*)
+FUNCTION_BLOCK FB_SetPosition_Beckhoff
+VAR_INPUT
+    Execute  : BOOL;
+    Position : LREAL; 
+    Mode     : BOOL; // RELATIVE=True, ABSOLUTE=False (Default)
+    //Options  : ST_SetPositionOptions; // only Feedback1 is supportet
+END_VAR
+
+VAR_OUTPUT
+    Done    : BOOL;
+    Busy    : BOOL;
+    Error   : BOOL;
+    ErrorID : UDINT;
+	
+	bStoredInNc : BOOL;
+	bStoredInDrive : BOOL;
+	bStoredInEncoder : BOOL;
+END_VAR
+
+VAR_IN_OUT
+    Axis 	: AXIS_REF;
+END_VAR
+
+VAR 
+	fPosition 			: LREAL;
+	bMode     			: BOOL; // RELATIVE=True, ABSOLUTE=False (Default)
+	nSeq 				: UDINT :=0;
+	fbTriggerExecute	: R_TRIG;
+	
+	fbReadDriveType 	: FB_ReadDriveInfo;
+	stDriveInfo 		: ST_DriveInfo;
+	
+	fbReadDriveAddress 	: MC_ReadDriveAddress;
+	fbSetPosNC 			: MC_SetPosition;
+
+	fbCoERead 			: FB_CoERead;
+	fbSoERead 			: FB_SoERead;
+
+	fbSetPositionOffset	: FB_SetPositionOffset;
+	fbDeletePositionOffset : FB_DeletePositionOffset;
+	bSetOffsetInNC		 : BOOL;
+	
+	eReadFromCoe :UINT := 99;
+	eReadFromSoe :UINT := 99;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbTriggerExecute(CLK:= THIS^.Execute);
+//Reset on positive execution edge
+IF fbTriggerExecute.Q THEN
+	THIS^.Done	:= FALSE;
+	THIS^.Busy	:= TRUE;
+	THIS^.Error	:= FALSE;
+	nSeq		:= 1;
+	bMode 		:= Mode;
+	fPosition 	:= Position;
+END_IF
+
+IF NOT (THIS^.Busy OR THIS^.Execute) THEN
+	THIS^.Done			:=FALSE;
+	THIS^.Busy			:=FALSE;
+	THIS^.Error			:=FALSE;
+	THIS^.ErrorID 		:= 0;
+	nSeq				:= 0;
+	bStoredInNc := FALSE;
+	bStoredInDrive := FALSE;
+	bStoredInEncoder := FALSE;	
+END_IF
+
+CASE nSeq OF
+	
+	0: //Nothing
+		RETURN;
+	
+	1: //Init
+		fbReadDriveType.Execute := FALSE;
+		fbCoERead.Execute		:= FALSE; 
+		fbSetPosNC.Execute		:= FALSE; 
+		bSetOffsetInNC			:= FALSE; 
+		fbReadDriveAddress.Execute := FALSE;
+		fbSetPositionOffset.Execute	:= FALSE; 
+		fbDeletePositionOffset.Execute	:= FALSE; 
+		nSeq := 10;
+
+	10: //Read drive type
+		fbReadDriveType.Execute  := TRUE;
+		nSeq := 11;
+		
+	11:	//Read drive type
+		IF fbReadDriveType.ErrorID = 19387 THEN
+			stDriveInfo.DeviceType := E_DeviceType.DEVICETYPE_UNKNOWN;
+			nSeq := 20;
+		ELSIF fbReadDriveType.Error THEN
+			nSeq := nSeq + 1000;
+		ELSIF NOT fbReadDriveType.Busy THEN
+			stDriveInfo := fbReadDriveType.DriveInfo;
+			nSeq := 20;
+		END_IF
+		
+	20: //Delete current NC2 Offset	
+		fbSetPosNC.Options.ClearPositionOffset 	:= TRUE;
+		fbSetPosNC.Execute 						:= TRUE; 
+		nSeq := 21;
+
+	21: //Delete current NC2 Offset	
+		IF fbSetPosNC.Error THEN
+			nSeq := nSeq + 1000;
+		ELSIF NOT fbSetPosNC.Busy THEN
+			fbSetPosNC.Execute								:= FALSE; 
+			fbSetPosNC.Options.ClearPositionOffset 	:= FALSE;
+			nSeq := 30;
+		END_IF	
+		
+	30: //Execute CoE/SoE read to get selectet store mode (Drive, Encoder)
+		CASE stDriveInfo.DeviceType OF
+			//ELM
+			DEVICETYPE_ELM72xx_OCT, DEVICETYPE_ELM72xx_OCT_SAFETY:
+				fbCoERead.Execute				:= TRUE; 
+				IF stDriveInfo.Channel = 0 THEN
+					fbCoERead.Index				:= 16#8000;
+					fbCoERead.SubIndex			:= 16#0D; 
+				ELSIF stDriveInfo.Channel = 1 THEN
+					fbCoERead.Index				:= 16#8100;
+					fbCoERead.SubIndex			:= 16#0D; 
+				END_IF
+
+
+			//AX80xx
+			DEVICETYPE_AX8000:                    	
+				fbCoERead.Execute				:= TRUE; 
+				IF stDriveInfo.Channel = 0 THEN
+					fbCoERead.Index				:= 16#3007;
+					fbCoERead.SubIndex			:= 16#02;  
+				ELSIF stDriveInfo.Channel = 1 THEN
+					fbCoERead.Index				:= 16#3407;
+					fbCoERead.SubIndex			:= 16#02; 
+				END_IF
+				
+				
+			//EL72xx 
+			DEVICETYPE_EL72x1, DEVICETYPE_EL72x1_OCT, DEVICETYPE_EL72x1_OCT_SAFETY:
+				;//EL72xx does not support save in encoder memory
+	
+				
+			//AX50xx	
+			DEVICETYPE_SOE_DEFAULT: 
+				fbSoERead.Execute			:= TRUE;        	
+				fbSoERead.Idn				:= (P_0_IDNs + 275);
+				fbSoeRead.Element 			:= 16#40;//the value of the parameter
+				
+			//Unknown or virtual	
+     		ELSE
+				;
+		END_CASE
+		nSeq := 40;
+		
+		
+	40: //Write E_PositionOffsetMemory 
+		CASE stDriveInfo.DeviceType OF
+			//ELM
+			DEVICETYPE_ELM72xx_OCT, DEVICETYPE_ELM72xx_OCT_SAFETY:
+				IF fbCoERead.Error THEN
+					nSeq := nSeq + 1000;
+				ELSIF NOT fbCoERead.Busy THEN
+					(*	Enum Value	Description
+						2 (0x02)	drive_memory
+						1 (0x01)	encoder_memory
+						0 (0x00)	offset_disabled	*)
+					bSetOffsetInNC := (eReadFromCoe = 0);
+					fbSetPositionOffset.Memory  := UINT_TO_BYTE(eReadFromCoe - 1);	
+					nSeq := 50;
+				END_IF
+
+				
+			//AX80xx
+			DEVICETYPE_AX8000:                    	
+				IF fbCoERead.Error THEN
+					nSeq := nSeq + 1000;
+				ELSIF NOT fbCoERead.Busy THEN
+					(*	CH1:3007:04 CH2:3407:04 Offset additional position actual value source 
+					https://infosys.beckhoff.com/content/1033/ax8xxx_object/8598064523.html 
+						Enum Value	Description
+						2 (0x02)	drive_memory
+						1 (0x01)	encoder_memory
+						0 (0x00)	offset_disabled	 *)
+					bSetOffsetInNC := (eReadFromCoe = 0);
+					fbSetPositionOffset.Memory  := UINT_TO_BYTE(eReadFromCoe - 1);
+					nSeq := 50;
+				END_IF
+				
+				
+			//EL72xx 
+			DEVICETYPE_EL72x1, DEVICETYPE_EL72x1_OCT, DEVICETYPE_EL72x1_OCT_SAFETY:
+				//EL72xx does not support save in encoder memory
+				fbSetPositionOffset.Memory := E_PositionOffsetMemory.ePositionOffsetMemory_Drive;
+				nSeq := 50;
+				
+			//AX50xx	
+			DEVICETYPE_SOE_DEFAULT: 
+				IF fbSoERead.Error THEN
+					nSeq := nSeq + 1000;
+				ELSIF NOT fbCoERead.Busy THEN
+					(*	P-0-0275-Position offset control / Feedback 1
+					https://infosys.beckhoff.com/content/1033/ax5000_idn_description/1365901707.html
+						Enum Value	Description
+						2 (0x02)	drive_memory
+						1 (0x01)	encoder_memory
+						0 (0x00)	offset_disabled		*)
+					bSetOffsetInNC := (eReadFromSoE = 0);
+					fbSetPositionOffset.Memory := UINT_TO_BYTE(eReadFromSoE - 1);
+					nSeq := 50;
+				END_IF
+				
+			//Unknown or virtual	
+     		ELSE
+				bSetOffsetInNC := TRUE;
+				nSeq := 50;
+		END_CASE
+			
+		
+	50:	//Decide whether Nc should be stored 
+		//temporarily in the NC or permanently in the drive/encoder
+		IF bSetOffsetInNC THEN
+			THIS^.bStoredInNc := TRUE;
+			nSeq := 100;
+		ELSE
+			THIS^.bStoredInDrive := fbSetPositionOffset.Memory = E_PositionOffsetMemory.ePositionOffsetMemory_Drive;
+			THIS^.bStoredInEncoder := fbSetPositionOffset.Memory = E_PositionOffsetMemory.ePositionOffsetMemory_Encoder;
+			nSeq := 200;
+		END_IF
+
+	
+	100://Set offset in NC	
+		fbSetPosNC.Execute	:= TRUE; 
+		fbSetPosNC.Position	:= THIS^.fPosition; 
+		fbSetPosNC.Mode		:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		nSeq := 101;
+		
+	101: // DONE
+		THIS^.Done			:= fbSetPosNC.Done;
+		THIS^.Busy			:= fbSetPosNC.Busy;
+		THIS^.Error			:= fbSetPosNC.Error;
+		THIS^.ErrorID 		:= fbSetPosNC.ErrorID;	
+
+	200://Delete current offset in NC	
+		fbDeletePositionOffset.Execute	:= TRUE; 
+		fbDeletePositionOffset.Feedback	:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbDeletePositionOffset.Memory	:= fbSetPositionOffset.Memory;
+		nSeq := 201;		
+		
+	201://Delete current offset in NC
+		IF fbDeletePositionOffset.Error THEN
+			nSeq := nSeq + 1000;
+		ELSIF NOT fbDeletePositionOffset.Busy THEN
+			nSeq := 202;
+		END_IF	
+		
+	202://Set offset in Drive/Encoder	
+		fbSetPositionOffset.Execute		:= TRUE; 
+		fbSetPositionOffset.Position	:= THIS^.fPosition; 
+		fbSetPositionOffset.Relative	:= THIS^.bMode; (* RELATIVE=True, ABSOLUTE=False*)	
+		fbSetPositionOffset.Feedback	:= E_PositionOffsetFeedback.ePositionOffsetFeedback1;
+		fbSetPositionOffset.Memory		:= fbSetPositionOffset.Memory;
+		nSeq := 203;
+		
+	203: // DONE
+		THIS^.Done			:= (NOT fbSetPositionOffset.Busy) AND (NOT fbSetPositionOffset.Error) ;
+		THIS^.Busy			:= fbSetPositionOffset.Busy;
+		THIS^.Error			:= fbSetPositionOffset.Error;
+		THIS^.ErrorID 		:= fbSetPositionOffset.ErrorID;	
+		
+	1000..1999: //Error
+		THIS^.Done			:= FALSE;
+		THIS^.Busy			:= FALSE;
+		THIS^.Error			:= TRUE;
+		THIS^.ErrorID 		:= nSeq;
+		
+END_CASE	
+
+//Cyclic update
+fbCoERead(Axis:= THIS^.Axis, pDstBuf := ADR(eReadFromCoe), BufLen := SIZEOF(eReadFromCoe));
+fbSoERead(Axis:= THIS^.Axis, pDstBuf := ADR(eReadFromSoE), BufLen := SIZEOF(eReadFromSoE));
+fbReadDriveType(Axis := Axis);
+fbSetPositionOffset(Axis := Axis);
+fbSetPosNC(Axis := Axis);
+
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

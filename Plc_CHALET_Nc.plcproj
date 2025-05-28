@@ -18,7 +18,7 @@
     <Company>Beckhoff CH</Company>
     <Released>false</Released>
     <Title>CHALET_Nc</Title>
-    <ProjectVersion>3.3.1</ProjectVersion>
+    <ProjectVersion>3.4.1</ProjectVersion>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="COMPONENTs" />
@@ -30,6 +30,7 @@
     <Folder Include="COMPONENTs\Optional\SetActPosition" />
     <Folder Include="COMPONENTs\Main FB" />
     <Folder Include="COMPONENTs\Optional" />
+    <Folder Include="COMPONENTs\Optional\SetActPosition\old" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="COMPONENTs\E_NcAxisCommands.TcDUT">
@@ -56,9 +57,6 @@
     <Compile Include="COMPONENTs\Optional\Reset\FB_Reset_NC_Sercos_CANopen.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="COMPONENTs\Optional\SetActPosition\FB_SetPosition_NC_Sercos_CANopen.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="COMPONENTs\Main FB\FB_NcAxis.TcPOU">
       <SubType>Code</SubType>
     </Compile>
@@ -72,6 +70,12 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="COMPONENTs\NcAxisFB.TcCD">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="COMPONENTs\Optional\SetActPosition\FB_SetPosition_Beckhoff.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="COMPONENTs\Optional\SetActPosition\old\FB_SetPosition_NC_Sercos_CANopen.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="NcParameterlist.TcGVL">
@@ -119,37 +123,37 @@
       <Resolution>CHALET_BaseComponents, * (Beckhoff CH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_Drive">
-      <Resolution>Tc2_Drive, 3.3.8.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_Drive, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_EtherCAT">
-      <Resolution>Tc2_EtherCAT, 3.3.21.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_EtherCAT, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_IoFunctions">
-      <Resolution>Tc2_IoFunctions, 3.3.13.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_IoFunctions, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_Math">
-      <Resolution>Tc2_Math, 3.3.1.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_Math, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_MC2">
-      <Resolution>Tc2_MC2, 3.3.48.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_MC2, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_MC2_Drive">
-      <Resolution>Tc2_MC2_Drive, 3.3.29.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_MC2_Drive, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_Standard">
-      <Resolution>Tc2_Standard, 3.3.3.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_Standard, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_System">
-      <Resolution>Tc2_System, 3.4.26.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_System, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc2_Utilities">
-      <Resolution>Tc2_Utilities, 3.3.54.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc2_Utilities, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc3_EventLogger">
-      <Resolution>Tc3_EventLogger, 3.1.33.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc3_EventLogger, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
     <PlaceholderResolution Include="Tc3_Module">
-      <Resolution>Tc3_Module, 3.3.21.0 (Beckhoff Automation GmbH)</Resolution>
+      <Resolution>Tc3_Module, * (Beckhoff Automation GmbH)</Resolution>
     </PlaceholderResolution>
   </ItemGroup>
   <ItemGroup>
